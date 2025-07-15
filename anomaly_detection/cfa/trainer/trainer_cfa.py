@@ -25,10 +25,6 @@ import json
 
 import vessl
 
-config_path = '/torch/public/result/config.json'
-with open(config_path, 'r') as f:
-    config_list = json.load(f)
-
 
 warnings.filterwarnings("ignore", category=UserWarning)
 use_cuda = torch.cuda.is_available()
@@ -37,6 +33,7 @@ device = torch.device('cuda' if use_cuda else 'cpu')
 
 def parse_args():
     parser = argparse.ArgumentParser('CFA configuration')
+    parser.add_argument('--config_path', type=str, default=os.environ.get('config_path', '/torch/public/result/config.json'))
     parser.add_argument('--data_path', type=str, default=os.environ.get('data_path', '/cfa_dataset/'))
     parser.add_argument('--save_path', type=str, default=os.environ.get('save_path', '/torch/public/result'))
     parser.add_argument('--save_model_type', type=str, choices=['dict', 'total'], default=os.environ.get('save_model_type', 'total'))
@@ -91,6 +88,8 @@ def save_checkpoint(model, args):
 def run():
 
     args = parse_args()
+    with open(args.config_path, 'r') as f:
+        config_list = json.load(f)
 
     seed = 1024
     random.seed(seed)
