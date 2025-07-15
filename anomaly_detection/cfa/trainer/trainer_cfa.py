@@ -21,6 +21,7 @@ from utils.cfa import *
 import warnings
 import json
 
+import vessl
 
 config_path = '/torch/public/result/config.json'
 with open(config_path, 'r') as f:
@@ -243,6 +244,8 @@ def run():
                     optimal_idx = np.argmax(tpr - fpr)
                     best_optimal_threshold = thresholds[optimal_idx]
                     save_checkpoint(loss_fn, args)
+
+            vessl.log({"best_img_roc": best_img_roc, "loss": best_acc})
 
             print(f'tn: {tn}\n'
                   f'fp: {fp}\n'
