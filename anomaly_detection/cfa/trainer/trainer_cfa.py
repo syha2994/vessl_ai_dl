@@ -34,6 +34,8 @@ device = torch.device('cuda' if use_cuda else 'cpu')
 def parse_args():
     parser = argparse.ArgumentParser('CFA configuration')
     parser.add_argument('--config_path', type=str, default=os.environ.get('config_path', '/torch/public/result/config.json'))
+    parser.add_argument('--pretrained_model_path', type=str, default=os.environ.get('pretrained_model_path', '/torch/public/result/config.json'))
+    parser.add_argument('--cfa_model_path', type=str, default=os.environ.get('cfa_model_path', '/torch/public/result/config.json'))
     parser.add_argument('--data_path', type=str, default=os.environ.get('data_path', '/cfa_dataset/'))
     parser.add_argument('--save_path', type=str, default=os.environ.get('save_path', '/torch/public/result'))
     parser.add_argument('--save_model_type', type=str, choices=['dict', 'total'], default=os.environ.get('save_model_type', 'total'))
@@ -54,7 +56,7 @@ def parse_args():
 
 
 # Function to Convert to ONNX
-def Convert_ONNX(model):
+def Convert_ONNX(model, cfa_model_path):
 
     # set the model to inference mode
     model.eval()
@@ -66,7 +68,7 @@ def Convert_ONNX(model):
     dummy_input_names = ['input_0']
     output_names = ['output_0', 'output_1']
 
-    torch.onnx.export(model, dummy_input, config_list['cfa_model_path'],
+    torch.onnx.export(model, dummy_input, cfa_model_path,
                       opset_version=12, do_constant_folding=True,
                       input_names=dummy_input_names, output_names=output_names,
                       dynamic_axes=dynamic_axes)
@@ -82,7 +84,7 @@ def save_checkpoint(model, args):
         torch.save(state, os.path.join(args.save_path, 'model.pth'))
     elif args.save_model_type == 'total':
         torch.save(model, os.path.join(args.save_path, 'model.pth'))
-    Convert_ONNX(model)
+    Convert_ONNX(model, args.cfa_model_path)
 
 
 def run():
@@ -151,7 +153,7 @@ def run():
         model = model.to(device)
         model.eval()
 
-        output_onnx = config_list['pretrained_model_path']
+        output_onnx = args.pretrained_model_path
         input_names = ["input_0"]
         output_names = ["output_0"]
         inputs = torch.randn(1, 3, 256, 256).to(device)
@@ -266,7 +268,7 @@ def run():
             print(f'threshold: {best_optimal_threshold}')
             config_list['min_s'], config_list['max_s'], config_list[
                 'threshold'] = float(best_heatmaps.min()), float(best_heatmaps.max()), float(best_optimal_threshold)
-            with open(config_path, 'w') as f:
+            with open(args.config_path, 'w') as f:
                 json.dump(config_list, f)
 
         total_roc_auc.append(best_img_roc)
