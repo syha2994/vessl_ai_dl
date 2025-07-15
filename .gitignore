@@ -1,0 +1,77 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+*.swp
+*.swo
+*.tmp
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+develop-eggs/
+.eggs/
+parts/
+sdist/
+var/
+pip-wheel-metadata/
+*.manifest
+*.spec
+*.log
+*.bak
+*.old
+*.orig
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+.python-version
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# VSCode
+.vscode/
+.history/
+
+# PyCharm
+.idea/
+*.iml
+
+# mypy / pyright / pylint
+.mypy_cache/
+.pytype/
+.pyre/
+.pyright/
+
+# Coverage / Testing
+.coverage
+coverage.xml
+*.cover
+.hypothesis/
+.cache/
+.tox/
+nosetests.xml
+pytest_cache/
+
+# Distribution
+wheelhouse/
+htmlcov/
+*.log
+
+# Others
+*.env
+.env.*
+*.sqlite3
+*.db
