@@ -103,7 +103,7 @@ class LoadDataset(Dataset):
                 continue
             img_fpath_list = sorted([os.path.join(img_type_dir, f)
                                      for f in os.listdir(img_type_dir)
-                                     if f.endswith('.bmp')])
+                                     if f.endswith('.bmp') or f.endswith('.png')])
             if phase == 'train':
                 img_fpath_list = img_fpath_list
             x.extend(img_fpath_list)
