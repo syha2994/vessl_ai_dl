@@ -2,6 +2,8 @@ import os
 import random
 import argparse
 
+import matplotlib.pyplot as plt
+
 import torch.onnx
 import torch.optim as optim
 from torch.utils.data import DataLoader
