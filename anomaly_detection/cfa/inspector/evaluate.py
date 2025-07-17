@@ -420,8 +420,8 @@ def parse_args():
     parser.add_argument('--test_batch_size', type=int, default=int(os.environ.get('TEST_BATCH_SIZE', 1)))
     parser.add_argument('--patch', type=int, default=int(os.environ.get('PATCH', 1)))
     parser.add_argument('--label', type=str, default=os.environ.get('LABEL', 'bad'))
-    parser.add_argument('--images_path1', type=str, default=os.environ.get('IMAGES_PATH1', '/test/good'))
-    parser.add_argument('--images_path2', type=str, default=os.environ.get('IMAGES_PATH2', '/test/bad'))
+    parser.add_argument('--images_path1', type=str, default=os.environ.get('GOOD_PATH', '/test/good'))
+    parser.add_argument('--images_path2', type=str, default=os.environ.get('BAD_PATH', '/test/bad'))
 
     return parser.parse_args()
 
