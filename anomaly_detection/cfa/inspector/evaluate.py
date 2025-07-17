@@ -18,8 +18,6 @@ import json
 import os
 os.environ["ORT_LOGGING_LEVEL"] = "VERBOSE"
 
-with open('config.json', 'r') as f:
-    config_list = json.load(f)
 
 warnings.filterwarnings("ignore", category=UserWarning)
 use_cuda = torch.cuda.is_available()
@@ -125,6 +123,9 @@ class Evaluate:
 
         if self.isVisual:
             self.hm = HeatMap()
+
+        with open(args.config_path, 'r') as f:
+            config_list = json.load(f)
 
         self.min_s = config_list['min_s']
         self.max_s = config_list['max_s']
@@ -373,8 +374,8 @@ class Evaluate:
         if use_cuda:
             # 프로바이더 설정
             providers = ['CUDAExecutionProvider']  # GPU 프로바이더로 설정
-            onnx_pre_model = rt.InferenceSession(config_list['pretrained_model_path'], providers=providers)
-            onnx_loss_fn = rt.InferenceSession(config_list['cfa_model_path'], providers=providers)
+            onnx_pre_model = rt.InferenceSession(args.pretrained_model_path, providers=providers)
+            onnx_loss_fn = rt.InferenceSession(args.cfa_model_path, providers=providers)
 
             pre_input_name = onnx_pre_model.get_inputs()[0].name
             pre_output_names = [output.name for output in onnx_pre_model.get_outputs()]
@@ -411,6 +412,8 @@ def create_image_dict(folder1, folder2):
 def parse_args():
     parser = argparse.ArgumentParser('CFA configuration')
     parser.add_argument('--config_path', type=str, default=os.environ.get('CONFIG_PATH', '/torch/public/result/config.json'))
+    parser.add_argument('--pretrained_model_path', type=str, default=os.environ.get('PRETRAINED_MODEL_PATH', '/torch/public/result/config.json'))
+    parser.add_argument('--cfa_model_path', type=str, default=os.environ.get('CFA_MODEL_PATH', '/torch/public/result/config.json'))
     parser.add_argument('--images_save_path', type=str, default=os.environ.get('IMAGES_SAVE_PATH', '/torch/output'))
     parser.add_argument('--size', type=int, choices=[224, 256], default=int(os.environ.get('SIZE', 256)))
     parser.add_argument('--visual', type=bool, default=os.environ.get('VISUAL', 'True') == 'True')
