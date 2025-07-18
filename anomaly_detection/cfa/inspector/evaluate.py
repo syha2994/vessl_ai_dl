@@ -38,7 +38,12 @@ class LoadDataset(Dataset):
         image = Image.fromarray(np.uint8(image))
         c = time.time()
         if self.resize_check==False:
-            image = image.resize((self.resize, self.resize), Image.ANTIALIAS)
+            try:
+                resample = Image.Resampling.LANCZOS
+            except AttributeError:
+                resample = Image.ANTIALIAS  # For Pillow versions < 10.0.0
+
+            image = image.resize((self.resize, self.resize), resample)
         d = time.time()
         image = np.array(image).astype(np.float32)
         image = image / 255.0
