@@ -25,7 +25,8 @@ RUN pip install torch==2.1.2+cu121 torchvision==0.16.2+cu121 torchaudio==2.1.2+c
 
 ENV PATH=/usr/local/cuda/bin:$PATH
 
-RUN pip install -e .
+COPY requirements.txt requirements.txt
+RUN pip install -r requirements.txt
 
 COPY docker_test.py docker_test.py
 
