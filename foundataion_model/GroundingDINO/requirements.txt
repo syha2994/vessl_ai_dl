@@ -13,7 +13,7 @@ paddleocr
 paddlepaddle
 paddlex
 pandas
-pillow=
+pillow
 pycocotools
 scikit-image
 scikit-learn
