@@ -1,34 +1,31 @@
-FROM pytorch/pytorch:2.1.2-cuda12.1-cudnn8-runtime
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu20.04
+
 ARG DEBIAN_FRONTEND=noninteractive
 
 ENV CUDA_HOME=/usr/local/cuda \
      TORCH_CUDA_ARCH_LIST="6.0 6.1 7.0 7.5 8.0 8.6+PTX" \
      SETUPTOOLS_USE_DISTUTILS=stdlib
 
-RUN conda update conda -y
-
-# Install libraries in the brand new image. 
-RUN apt-get -y update && apt-get install -y --no-install-recommends \
-         wget \
-         build-essential \
-         git \
-         python3-opencv \
-         ca-certificates && \
+# 기본 패키지 설치
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-opencv \
+    git \
+    wget \
+    build-essential \
+    ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Set the working directory for all the subsequent Dockerfile instructions.
-WORKDIR /opt/program
+# pip 최신화 + venv 사용 X
+RUN python3 -m pip install --upgrade pip
 
-RUN git clone https://github.com/IDEA-Research/GroundingDINO.git
-
-RUN mkdir weights ; cd weights ; wget -q https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth ; cd ..
-
-RUN conda install -c "nvidia/label/cuda-12.1.1" cuda -y
-ENV CUDA_HOME=$CONDA_PREFIX
+# PyTorch (CUDA 12.1, pip 기반)
+RUN pip install torch==2.1.2+cu121 torchvision==0.16.2+cu121 torchaudio==2.1.2+cu121 --index-url https://download.pytorch.org/whl/cu121
 
 ENV PATH=/usr/local/cuda/bin:$PATH
 
-RUN cd GroundingDINO/ && python -m pip install .
+RUN pip install -e .
 
 COPY docker_test.py docker_test.py
 
