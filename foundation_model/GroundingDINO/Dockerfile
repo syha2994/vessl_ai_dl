@@ -1,4 +1,5 @@
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu20.04
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu20.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -14,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     wget \
     build-essential \
+    ninja-build \
     ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
