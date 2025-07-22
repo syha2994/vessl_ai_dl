@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     build-essential \
     ninja-build \
-    ca-certificates && \
+    ca-certificates \
+    python3-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # pip 최신화 + venv 사용 X
