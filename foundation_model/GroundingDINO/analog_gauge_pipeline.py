@@ -1,6 +1,7 @@
 import os
-import torch
 import cv2
+import time
+import torch
 import numpy as np
 from dataclasses import dataclass
 from torchvision.ops import box_convert
@@ -124,6 +125,7 @@ class AnalogGaugeInspector:
         cv2.imwrite(os.path.join(self.params.result_dir, f"ocr_vis_{image_name}"), image_np)
 
     def process_image(self, image_name):
+        start_total = time.time()
         image_path = os.path.join(self.params.image_dir, image_name)
         image_bgr = cv2.imread(image_path)
         print(f"\nProcessing {image_name}...")
@@ -147,6 +149,7 @@ class AnalogGaugeInspector:
                 print(f"Failed to parse parameters from filename {image_name}: {e}. Using default values.")
 
         # -------- Step1. Grounding DINO 를 이용해 아날로그 게이지 객체 탐지 --------
+        start_step1 = time.time()
         image_tensor = Model.preprocess_image(image_bgr)
         boxes_gauge, logits_gauge, phrases_gauge = dino_predict(
             model=self.dino_model,
@@ -156,9 +159,11 @@ class AnalogGaugeInspector:
             text_threshold=self.params.text_threshold_gauge,
             device=self.device
         )
+        print(f"Step1 (Gauge Detection) time: {time.time() - start_step1:.3f}s")
         box_gauge = self.select_highest_confidence_box(boxes_gauge, logits_gauge)
         if box_gauge is None:
             self.handle_missing_detection(image_bgr, image_name, "No gauge detected", (0, 0, 255))
+            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
             return
 
         gauge_box_xyxy = self.scale_and_convert_boxes_to_xyxy(box_gauge, image_bgr)
@@ -167,9 +172,11 @@ class AnalogGaugeInspector:
             cropped_image_np = image_bgr[y1:y2, x1:x2]
         else:
             self.handle_missing_detection(image_bgr, image_name, "Invalid crop box for gauge", (0, 0, 255))
+            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
             return
 
         # -------- Step2. Grounding DINO 를 이용해 바늘 객체 탐지 --------
+        start_step2 = time.time()
         cropped_image_tensor = Model.preprocess_image(cropped_image_np)
         boxes_needle, logits_needle, phrases_needle = dino_predict(
             model=self.dino_model,
@@ -179,12 +186,14 @@ class AnalogGaugeInspector:
             text_threshold=self.params.text_threshold_needle,
             device=self.device
         )
+        print(f"Step2 (Needle Detection) time: {time.time() - start_step2:.3f}s")
         cropped_image_np_vis = cropped_image_np.copy()
 
         if boxes_needle.shape[0] > 0:
             selected_box = self.select_valid_needle_box(boxes_needle, logits_needle, cropped_image_np)
             if selected_box is None:
                 self.handle_missing_detection(cropped_image_np_vis, image_name, "No suitable needle box found", (0, 0, 255))
+                print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
                 return
             else:
                 box_needle_xyxy = self.scale_and_convert_boxes_to_xyxy(selected_box, cropped_image_np)
@@ -192,11 +201,14 @@ class AnalogGaugeInspector:
                 cv2.rectangle(cropped_image_np_vis, (x1, y1), (x2, y2), color=(0, 200, 0), thickness=2)
         else:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "No needle boxes detected", (0, 0, 255))
+            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
             return
 
         # -------- Step3. SAM 모델을 이용해 바늘 마스크 예측 --------
+        start_step3 = time.time()
         self.sam_predictor.set_image(cropped_image_np)
         needle_mask, _, _ = self.sam_predictor.predict(box=box_needle_xyxy, multimask_output=False)
+        print(f"Step3 (SAM Mask Predict) time: {time.time() - start_step3:.3f}s")
 
         # 마스크를 원본 이미지에 덧씌우기
         colored_mask = np.zeros_like(cropped_image_np_vis, dtype=np.uint8)
@@ -204,9 +216,12 @@ class AnalogGaugeInspector:
         cropped_image_np_vis = cv2.addWeighted(cropped_image_np_vis, 1.0, colored_mask, 0.8, 0)
 
         # -------- Step4. Sam으로 예측된 바늘 마스크에서 컨투어 추출 --------
+        start_step4 = time.time()
         contours, _ = cv2.findContours(needle_mask[0].astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        print(f"Step4 (Contour Extraction) time: {time.time() - start_step4:.3f}s")
         if len(contours) == 0:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "No contours found for needle", (0, 0, 255))
+            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
             return
 
         # 가장 큰 컨투어를 바늘로 간주
@@ -221,10 +236,13 @@ class AnalogGaugeInspector:
             cv2.circle(cropped_image_np_vis, center, radius=5, color=(255, 255, 0), thickness=-1)
         else:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "No valid moments found for needle", (0, 0, 255))
+            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
             return
 
         # -------- Step5. PaddleOCR를 이용해 눈금 텍스트 추출 및 시각화 --------
+        start_step5 = time.time()
         ocr_result_with_boxes = self.paddle_ocr.ocr(cropped_image_np)[0]
+        print(f"Step5 (OCR) time: {time.time() - start_step5:.3f}s")
 
         expected_values = np.arange(self.params.min_value, self.params.max_value + 1e-5, self.params.tick_interval)
         expected_texts = set([str(int(v)) if v == int(v) else f"{v:.1f}" for v in expected_values])
@@ -256,8 +274,11 @@ class AnalogGaugeInspector:
                     continue
 
         # -------- Step6. 바늘과 OCR 중심점 간의 거리 계산 및 바늘 위치 결정 --------
+        start_step6 = time.time()
         if len(ocr_centers) < 2:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "Not enough valid OCR values found", (0, 0, 255))
+            print(f"Step6 (Needle Point Selection) time: {time.time() - start_step6:.3f}s")
+            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
             return
 
         # 중심으로부터 가장 먼 점을 첫 번째 점으로 선택
@@ -295,8 +316,10 @@ class AnalogGaugeInspector:
             needle_point = needle_point_1 if pt1_dist < pt2_dist else needle_point_2
 
         cv2.circle(cropped_image_np_vis, tuple(needle_point[0]), radius=5, color=(0, 255, 0), thickness=-1)
+        print(f"Step6 (Needle Point Selection) time: {time.time() - start_step6:.3f}s")
 
         # -------- Step7. 바늘 각도 계산 및 게이지 값 추정 --------
+        start_step7 = time.time()
         needle_angle = np.arctan2(needle_point[0][1] - center[1], needle_point[0][0] - center[0])
 
         if len(value_angles) >= 2:
@@ -322,6 +345,8 @@ class AnalogGaugeInspector:
             print(f"OCR visualization saved to {vis_output_path}")
         else:
             print("Not enough valid OCR values for interpolation.")
+        print(f"Step7 (Angle & Value Estimation) time: {time.time() - start_step7:.3f}s")
+        print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
 
     def run(self):
         for image_name in os.listdir(self.params.image_dir):
