@@ -28,13 +28,6 @@ ENV PATH=/usr/local/cuda/bin:$PATH
 COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
-# GroundingDINO 설치 (editable)
-COPY . /workspace
-WORKDIR /workspace
-RUN pip install -v -e .
-
-# 테스트용 파일
-WORKDIR /workspace
 COPY docker_test.py docker_test.py
 
-CMD ["python3", "docker_test.py"]
+CMD [ "python", "docker_test.py" ]
