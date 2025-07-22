@@ -2,16 +2,13 @@ import os
 import torch
 import cv2
 import numpy as np
-from PIL import Image
-from torchvision.ops import box_convert
-import matplotlib.pyplot as plt
 from dataclasses import dataclass
+from torchvision.ops import box_convert
 
 # Grounding DINO와 SAM 모델 로드 유틸리티
-from run_dino_pred import DinoPredictor
-from groundingdino.util.inference import load_model as load_dino, predict as dino_predict
-from groundingdino.util.inference import Model  # Model.preprocess_image 사용
 from segment_anything import sam_model_registry, SamPredictor
+from groundingdino.util.inference import Model  # Model.preprocess_image 사용
+from groundingdino.util.inference import load_model as load_dino, predict as dino_predict
 
 # OCR 라이브러리 추가
 from paddleocr import PaddleOCR
@@ -150,17 +147,16 @@ class AnalogGaugeInspector:
                 print(f"Failed to parse parameters from filename {image_name}: {e}. Using default values.")
 
         # -------- Step1. Grounding DINO 를 이용해 아날로그 게이지 객체 탐지 --------
-        gauge_dino_predictor = DinoPredictor(
-            dino_config_path=self.params.dino_config,
-            dino_weight_path=self.params.dino_weights,
-            image_bgr=image_bgr,
-            device=self.device,
+        image_tensor = Model.preprocess_image(image_bgr)
+        boxes_gauge, logits_gauge, phrases_gauge = dino_predict(
+            model=self.dino_model,
+            image=image_tensor,
             caption=self.params.analog_gauge_caption,
             box_threshold=self.params.box_threshold_gauge,
-            text_threshold=self.params.text_threshold_gauge
+            text_threshold=self.params.text_threshold_gauge,
+            device=self.device
         )
-        boxes_gauge, logits_gaige, phrases_gauge = gauge_dino_predictor.run()
-        box_gauge = self.select_highest_confidence_box(boxes_gauge, logits_gaige)
+        box_gauge = self.select_highest_confidence_box(boxes_gauge, logits_gauge)
         if box_gauge is None:
             self.handle_missing_detection(image_bgr, image_name, "No gauge detected", (0, 0, 255))
             return
@@ -174,16 +170,15 @@ class AnalogGaugeInspector:
             return
 
         # -------- Step2. Grounding DINO 를 이용해 바늘 객체 탐지 --------
-        needle_dino_predictor = DinoPredictor(
-            dino_config_path=self.params.dino_config,
-            dino_weight_path=self.params.dino_weights,
-            image_bgr=cropped_image_np,
-            device=self.device,
+        cropped_image_tensor = Model.preprocess_image(cropped_image_np)
+        boxes_needle, logits_needle, phrases_needle = dino_predict(
+            model=self.dino_model,
+            image=cropped_image_tensor,
             caption=self.params.needle_caption,
             box_threshold=self.params.box_threshold_needle,
-            text_threshold=self.params.text_threshold_needle
+            text_threshold=self.params.text_threshold_needle,
+            device=self.device
         )
-        boxes_needle, logits_needle, phrases_needle = needle_dino_predictor.run()
         cropped_image_np_vis = cropped_image_np.copy()
 
         if boxes_needle.shape[0] > 0:
