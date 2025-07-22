@@ -340,6 +340,10 @@ class AnalogGaugeInspector:
         print(f"Step7 (Angle & Value Estimation) time: {time.time() - start_step7:.3f}s")
 
     def run(self):
+        import torch
+        print('torch.cuda.is_available: ', torch.cuda.is_available())
+        print('torch.cuda.get_device_name: ', torch.cuda.get_device_name(0))
+
         for image_name in os.listdir(self.params.image_dir):
             if not image_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp")):
                 continue
