@@ -125,7 +125,6 @@ class AnalogGaugeInspector:
         cv2.imwrite(os.path.join(self.params.result_dir, f"ocr_vis_{image_name}"), image_np)
 
     def process_image(self, image_name):
-        start_total = time.time()
         image_path = os.path.join(self.params.image_dir, image_name)
         image_bgr = cv2.imread(image_path)
         print(f"\nProcessing {image_name}...")
@@ -163,7 +162,6 @@ class AnalogGaugeInspector:
         box_gauge = self.select_highest_confidence_box(boxes_gauge, logits_gauge)
         if box_gauge is None:
             self.handle_missing_detection(image_bgr, image_name, "No gauge detected", (0, 0, 255))
-            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
             return
 
         gauge_box_xyxy = self.scale_and_convert_boxes_to_xyxy(box_gauge, image_bgr)
@@ -172,7 +170,6 @@ class AnalogGaugeInspector:
             cropped_image_np = image_bgr[y1:y2, x1:x2]
         else:
             self.handle_missing_detection(image_bgr, image_name, "Invalid crop box for gauge", (0, 0, 255))
-            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
             return
 
         # -------- Step2. Grounding DINO 를 이용해 바늘 객체 탐지 --------
@@ -193,7 +190,6 @@ class AnalogGaugeInspector:
             selected_box = self.select_valid_needle_box(boxes_needle, logits_needle, cropped_image_np)
             if selected_box is None:
                 self.handle_missing_detection(cropped_image_np_vis, image_name, "No suitable needle box found", (0, 0, 255))
-                print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
                 return
             else:
                 box_needle_xyxy = self.scale_and_convert_boxes_to_xyxy(selected_box, cropped_image_np)
@@ -201,7 +197,6 @@ class AnalogGaugeInspector:
                 cv2.rectangle(cropped_image_np_vis, (x1, y1), (x2, y2), color=(0, 200, 0), thickness=2)
         else:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "No needle boxes detected", (0, 0, 255))
-            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
             return
 
         # -------- Step3. SAM 모델을 이용해 바늘 마스크 예측 --------
@@ -221,7 +216,6 @@ class AnalogGaugeInspector:
         print(f"Step4 (Contour Extraction) time: {time.time() - start_step4:.3f}s")
         if len(contours) == 0:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "No contours found for needle", (0, 0, 255))
-            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
             return
 
         # 가장 큰 컨투어를 바늘로 간주
@@ -236,7 +230,6 @@ class AnalogGaugeInspector:
             cv2.circle(cropped_image_np_vis, center, radius=5, color=(255, 255, 0), thickness=-1)
         else:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "No valid moments found for needle", (0, 0, 255))
-            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
             return
 
         # -------- Step5. PaddleOCR를 이용해 눈금 텍스트 추출 및 시각화 --------
@@ -278,7 +271,6 @@ class AnalogGaugeInspector:
         if len(ocr_centers) < 2:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "Not enough valid OCR values found", (0, 0, 255))
             print(f"Step6 (Needle Point Selection) time: {time.time() - start_step6:.3f}s")
-            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
             return
 
         # 중심으로부터 가장 먼 점을 첫 번째 점으로 선택
@@ -346,13 +338,16 @@ class AnalogGaugeInspector:
         else:
             print("Not enough valid OCR values for interpolation.")
         print(f"Step7 (Angle & Value Estimation) time: {time.time() - start_step7:.3f}s")
-        print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
 
     def run(self):
         for image_name in os.listdir(self.params.image_dir):
             if not image_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp")):
                 continue
+            print('##################################################')
+            start_total = time.time()
             self.process_image(image_name)
+            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
+            print('##################################################')
 
 
 if __name__ == "__main__":
