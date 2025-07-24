@@ -335,6 +335,22 @@ class AnalogGaugeInspector:
             vis_output_path = os.path.join(self.params.result_dir, f"ocr_vis_{image_name}")
             cv2.imwrite(vis_output_path, cropped_image_np_vis)
             print(f"OCR visualization saved to {vis_output_path}")
+
+            # ---------------- VESSL 로그에 이미지 업로드 -------------------
+            import vessl
+            vessl.init()
+
+            # 원본 이미지와 결과 이미지 나란히 붙이기 (좌우 연결)
+            original_resized = cv2.resize(cropped_image_np, (cropped_image_np_vis.shape[1], cropped_image_np_vis.shape[0]))
+            concat_image = cv2.hconcat([original_resized, cropped_image_np_vis])
+            # VESSL 로그에 업로드 (키명 명확화, 캡션에 입력 이미지명 명시)
+            vessl.log({
+                "analog_gauge_result": vessl.Image(
+                    data=concat_image[..., ::-1],
+                    caption=f"{image_name} - Left: input / Right: result"
+                )
+            })
+            # -----------------------------------------------------------
         else:
             print("Not enough valid OCR values for interpolation.")
         print(f"Step7 (Angle & Value Estimation) time: {time.time() - start_step7:.3f}s")
