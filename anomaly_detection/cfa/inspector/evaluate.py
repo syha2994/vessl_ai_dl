@@ -14,6 +14,7 @@ import onnxruntime as rt
 import numpy as np
 import time
 import json
+import vessl
 
 import os
 os.environ["ORT_LOGGING_LEVEL"] = "VERBOSE"
@@ -146,6 +147,7 @@ class Evaluate:
         precision = 0
         recall = 0
         f1 = 0
+        result_images = []
         for i, f in enumerate(self.images_files):
             t0 = time.time()
             heat_maps = []
@@ -221,7 +223,6 @@ class Evaluate:
                         fn += 1
                 ###############################################
 
-
                 sc = scores[:, :, j]
                 if self.isVisual:
                     hm_img = self.hm.draw(p, sc, f, j)
@@ -237,6 +238,13 @@ class Evaluate:
                     cv2.imwrite(f'{args.images_save_path}/good/{rename}', np.array(concated_hm))
                 elif self.images_dict[f] == 'bad':
                     cv2.imwrite(f'{args.images_save_path}/bad/{rename}', np.array(concated_hm))
+                result_images.append(
+                    vessl.Image(
+                        data=np.array(concated_hm),
+                        caption=f'{rename} - {self.images_dict[f]}'
+                    )
+                )
+
             t13 = time.time()
             print(f'all: {t13-t0}')
             print(f'preprocessing: {t0_2 - t0_1}')
@@ -252,10 +260,18 @@ class Evaluate:
             print(f'gaussian: {t11-t10}')
             print(f'testset_rescale: {t12 - t11}')
             print(f'inference: {t13-t12}')
+
+        if result_images:
+            vessl.log(
+                payload={
+                    "result-images": result_images
+                }
+            )
         precision = tp / (tp + fp)
         recall = tp / (tp + fn)
         f1 = 2 / ((1/precision)+(1/recall))
         print(f'thr: {self.threshold}, tp: {tp}, fp:{fp}, tn: {tn}, fn:{fn}, precision: {precision}, recall: {recall}, f1: {f1}')
+
 
 
 
@@ -372,8 +388,6 @@ class Evaluate:
         for i in range(0, bs):
             x[i] = gaussian_filter(x[i], sigma=sigma)
         return x
-
-
 
     def load_model(self, args):
         if use_cuda:
