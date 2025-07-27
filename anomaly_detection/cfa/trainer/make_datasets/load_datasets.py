@@ -22,9 +22,8 @@ def random_zoom_shift(image, zoom_range=(0.9, 1.1), shift_range=(-20, 20)):
 
 
 class LoadDataset(Dataset):
-    def __init__(self, dataset_path, class_name='bottle', resize=256, cropsize=256, info='train', train=True):
+    def __init__(self, dataset_path, resize=256, cropsize=256, info='train', train=True):
         self.dataset_path = dataset_path
-        self.class_name = class_name
         # self.is_train = is_train
         self.resize = resize
         self.cropsize = cropsize
@@ -89,8 +88,8 @@ class LoadDataset(Dataset):
         phase = self.info
         x, y, mask = [], [], []
 
-        img_dir = os.path.join(self.dataset_path, self.class_name, phase)
-        gt_dir = os.path.join(self.dataset_path, self.class_name, 'ground_truth')
+        img_dir = os.path.join(self.dataset_path, phase)
+        gt_dir = os.path.join(self.dataset_path, 'ground_truth')
 
         img_types = [f for f in sorted(os.listdir(img_dir)) if not f.startswith('.DS_Store')]
         # img_types = sorted(os.listdir(img_dir))
