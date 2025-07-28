@@ -226,6 +226,7 @@ def run():
             save_checkpoint(loss_fn, args)
 
             if args.model_version > 0:
+                vessl.configure()
                 vessl.register_torch_model(
                     repository_name="cfa-carpet",
                     model_number=args.model_version,
@@ -248,6 +249,7 @@ def run():
                 optimal_idx = np.argmax(tpr - fpr)
                 best_optimal_threshold = thresholds[optimal_idx]
                 save_checkpoint(loss_fn, args)
+                vessl.configure()
                 vessl.register_torch_model(
                     repository_name="cfa-carpet",
                     model_number=1,
