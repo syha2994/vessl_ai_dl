@@ -29,6 +29,8 @@ device = torch.device('cuda' if use_cuda else 'cpu')
 
 def parse_args():
     parser = argparse.ArgumentParser('CFA configuration')
+    parser.add_argument('--model_version', type=int, default=os.environ.get('MODEL_VERSION', 0))
+    parser.add_argument('--model_description', type=str, default=os.environ.get('MODEL_DESCRIPTION', "nothing"))
     parser.add_argument('--config_path', type=str, default=os.environ.get('CONFIG_PATH', '/torch/public/result/config.json'))
     parser.add_argument('--pretrained_model_path', type=str, default=os.environ.get('PRETRAINED_MODEL_PATH', '/torch/public/result/config.json'))
     parser.add_argument('--cfa_model_path', type=str, default=os.environ.get('CFA_MODEL_PATH', '/torch/public/result/config.json'))
@@ -223,12 +225,14 @@ def run():
             best_optimal_threshold = thresholds[optimal_idx]
             save_checkpoint(loss_fn, args)
 
-            vessl.register_torch_model(
-                repository_name="cfa-carpet",
-                model_number=1,
-                model_instance=loss_fn,
-                requirements=["torch"],
-            )
+            if args.model_version > 0:
+                vessl.register_torch_model(
+                    repository_name="cfa-carpet",
+                    model_number=args.model_version,
+                    model_instance=loss_fn,
+                    requirements=["torch"],
+                    description=args.model_description,
+                )
 
             tn, fp, fn, tp, acc, f1, fn_idx, fp_idx = cal_acc(scores, gt_list, best_optimal_threshold)
             if acc > best_acc:
