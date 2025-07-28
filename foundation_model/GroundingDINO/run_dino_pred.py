@@ -16,9 +16,9 @@ class GroundingDINOParams:
     dino_weights: str = os.getenv("DINO_WEIGHTS", "./public/model/groundingdino_swint_ogc.pth")
     image_dir: str = os.getenv("IMAGE_DIR", "./")
     result_dir: str = os.getenv("RESULT_DIR", "./")
-    box_threshold: float = float(os.getenv("BOX_THRESHOLD_GAUGE", 0.3))
-    text_threshold: float = float(os.getenv("TEXT_THRESHOLD_GAUGE", 0.25))
-    caption: str = os.getenv("ANALOG_GAUGE_CAPTION", "analog gauge dial")
+    box_threshold: float = float(os.getenv("BOX_THRESHOLD", 0.3))
+    text_threshold: float = float(os.getenv("TEXT_THRESHOLD", 0.25))
+    caption: str = os.getenv("CAPTION", "analog gauge dial")
     topk: int = int(os.getenv("TOP_K", 1))
 
 
