@@ -237,6 +237,12 @@ def run():
                 optimal_idx = np.argmax(tpr - fpr)
                 best_optimal_threshold = thresholds[optimal_idx]
                 save_checkpoint(loss_fn, args)
+                vessl.register_torch_model(
+                    repository_name="cfa-carpet",
+                    model_number=1,
+                    model_instance=loss_fn,
+                    requirements=["torch"],
+                )
 
         vessl.log({"best_img_roc": best_img_roc, "loss": best_acc})
 
