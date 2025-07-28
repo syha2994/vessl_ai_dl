@@ -229,7 +229,7 @@ def run():
                 vessl.configure()
                 vessl.register_torch_model(
                     repository_name="cfa-carpet",
-                    model_number=args.model_version,
+                    model_number=None,
                     model_instance=loss_fn,
                     requirements=["torch"],
                     description=args.model_description,
