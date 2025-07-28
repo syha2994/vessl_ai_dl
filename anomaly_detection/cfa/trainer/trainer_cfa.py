@@ -225,16 +225,6 @@ def run():
             best_optimal_threshold = thresholds[optimal_idx]
             save_checkpoint(loss_fn, args)
 
-            if args.model_version > 0:
-                vessl.configure()
-                vessl.register_torch_model(
-                    repository_name="cfa-carpet",
-                    model_number=None,
-                    model_instance=loss_fn,
-                    requirements=["torch"],
-                    description=args.model_description,
-                )
-
             tn, fp, fn, tp, acc, f1, fn_idx, fp_idx = cal_acc(scores, gt_list, best_optimal_threshold)
             if acc > best_acc:
                 print('best_acc!')
@@ -249,13 +239,6 @@ def run():
                 optimal_idx = np.argmax(tpr - fpr)
                 best_optimal_threshold = thresholds[optimal_idx]
                 save_checkpoint(loss_fn, args)
-                vessl.configure()
-                vessl.register_torch_model(
-                    repository_name="cfa-carpet",
-                    model_number=1,
-                    model_instance=loss_fn,
-                    requirements=["torch"],
-                )
 
         vessl.log({"best_img_roc": best_img_roc, "loss": best_acc})
 
@@ -288,6 +271,16 @@ def run():
 
     fig.tight_layout()
     fig.savefig(os.path.join(args.save_path, 'roc_curve.png'), dpi=100)
+
+    if args.model_version > 0:
+        vessl.configure()
+        vessl.register_torch_model(
+            repository_name="cfa-carpet",
+            model_number=None,
+            model_instance=loss_fn,
+            requirements=["torch"],
+            description=args.model_description,
+        )
 
 
 if __name__ == '__main__':
