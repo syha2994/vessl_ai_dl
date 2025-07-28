@@ -1,44 +1,13 @@
-from groundingdino.util.train import load_model, load_image,train_image, annotate
-import cv2
 import os
-import json
+import cv2
 import csv
+import vessl
 import torch
-from collections import defaultdict
+import argparse
 import torch.optim as optim
+from collections import defaultdict
+from groundingdino.util.train import load_model, load_image, train_image
 
-# Model
-model = load_model("groundingdino/config/GroundingDINO_SwinT_OGC.py", "weights/groundingdino_swint_ogc.pth")
-
-# Dataset paths
-images_files=sorted(os.listdir("multimodal-data/images"))
-ann_file="multimodal-data/annotation/annotation.csv"
-
-def draw_box_with_label(image, output_path, coordinates, label, color=(0, 0, 255), thickness=2, font_scale=0.5):
-    """
-    Draw a box and a label on an image using OpenCV.
-
-    Parameters:
-    - image (numpyarray): input image.
-    - output_path (str): Path to save the image with the box and label.
-    - coordinates (tuple): A tuple (x1, y1, x2, y2) indicating the top-left and bottom-right corners of the box.
-    - label (str): The label text to be drawn next to the box.
-    - color (tuple, optional): Color of the box and label in BGR format. Default is red (0, 0, 255).
-    - thickness (int, optional): Thickness of the box's border. Default is 2 pixels.
-    - font_scale (float, optional): Font scale for the label. Default is 0.5.
-    """
-    
-    # Draw the rectangle
-    cv2.rectangle(image, (coordinates[0], coordinates[1]), (coordinates[2], coordinates[3]), color, thickness)
-    
-    # Define a position for the label (just above the top-left corner of the rectangle)
-    label_position = (coordinates[0], coordinates[1]-10)
-    
-    # Draw the label
-    cv2.putText(image, label, label_position, cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness, cv2.LINE_AA)
-    
-    # Save the modified image
-    cv2.imwrite(output_path, image)
 
 def draw_box_with_label(image, output_path, coordinates, label, color=(0, 0, 255), thickness=2, font_scale=0.5):
     """
@@ -53,25 +22,24 @@ def draw_box_with_label(image, output_path, coordinates, label, color=(0, 0, 255
     - thickness (int, optional): Thickness of the box's border. Default is 2 pixels.
     - font_scale (float, optional): Font scale for the label. Default is 0.5.
     """
-    
+
     # Draw the rectangle
     cv2.rectangle(image, (coordinates[0], coordinates[1]), (coordinates[2], coordinates[3]), color, thickness)
-    
+
     # Define a position for the label (just above the top-left corner of the rectangle)
     label_position = (coordinates[0], coordinates[1]-10)
-    
+
     # Draw the label
     cv2.putText(image, label, label_position, cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness, cv2.LINE_AA)
-    
+
     # Save the modified image
     cv2.imwrite(output_path, image)
-
 
 
 def read_dataset(ann_file):
     ann_Dict= defaultdict(lambda: defaultdict(list))
     with open(ann_file) as file_obj:
-        ann_reader= csv.DictReader(file_obj)  
+        ann_reader= csv.DictReader(file_obj)
         # Iterate over each row in the csv file
         # using reader object
         for row in ann_reader:
@@ -90,10 +58,10 @@ def read_dataset(ann_file):
 def train(model, ann_file, epochs=1, save_path='weights/model_weights',save_epoch=50):
     # Read Dataset
     ann_Dict = read_dataset(ann_file)
-    
+
     # Add optimizer
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
-    
+
     # Ensure the model is in training mode
     model.train()
 
@@ -106,7 +74,7 @@ def train(model, ann_file, epochs=1, save_path='weights/model_weights',save_epoc
 
             # Zero the gradients
             optimizer.zero_grad()
-            
+
             # Call the training function for each image and its annotations
             loss = train_image(
                 model=model,
@@ -115,11 +83,11 @@ def train(model, ann_file, epochs=1, save_path='weights/model_weights',save_epoc
                 caption_objects=captions,
                 box_target=bxs,
             )
-            
+
             # Backpropagate and optimize
             loss.backward()
             optimizer.step()
-            
+
             total_loss += loss.item()  # Accumulate the loss
             print(f"Processed image {idx+1}/{len(ann_Dict)}, Loss: {loss.item()}")
 
@@ -131,6 +99,22 @@ def train(model, ann_file, epochs=1, save_path='weights/model_weights',save_epoc
             print(f"Model weights saved to {save_path}{epoch}.pth")
 
 
-
 if __name__=="__main__":
-    train(model=model, ann_file=ann_file, epochs=2000, save_path='weights/model_weights')
+    parser = argparse.ArgumentParser(description="Train Grounding DINO model using VESSL")
+
+    parser.add_argument("--config_path", type=str, default=os.getenv("CONFIG_PATH", "groundingdino/config/GroundingDINO_SwinT_OGC.py"), help="Path to model config file")
+    parser.add_argument("--weights_path", type=str, default=os.getenv("WEIGHTS_PATH", "weights/groundingdino_swint_ogc.pth"), help="Path to model weights")
+    parser.add_argument("--images_dir", type=str, default=os.getenv("IMAGES_DIR", "multimodal-data/images"), help="Directory with training images")
+    parser.add_argument("--ann_file", type=str, default=os.getenv("ANN_FILE", "multimodal-data/annotation/annotation.csv"), help="CSV annotation file")
+    parser.add_argument("--epochs", type=int, default=int(os.getenv("EPOCHS", 100)), help="Number of training epochs")
+    parser.add_argument("--save_path", type=str, default=os.getenv("SAVE_PATH", "weights/model_weights"), help="Directory to save model weights")
+    parser.add_argument("--save_epoch", type=int, default=int(os.getenv("SAVE_EPOCH", 50)), help="Epoch interval to save model weights")
+
+    args = parser.parse_args()
+
+    # Update model and dataset paths
+    model = load_model(args.config_path, args.weights_path)
+    images_files = sorted(os.listdir(args.images_dir))
+    ann_file = args.ann_file
+
+    train(model=model, ann_file=ann_file, epochs=args.epochs, save_path=args.save_path, save_epoch=args.save_epoch)
