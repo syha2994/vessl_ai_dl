@@ -6,21 +6,6 @@ from torchvision import transforms as T
 import cv2
 
 
-def random_zoom_shift(image, zoom_range=(0.9, 1.1), shift_range=(-20, 20)):
-    # 랜덤하게 확대/축소
-    zoom_factor = np.random.uniform(*zoom_range)
-    new_height, new_width = int(image.shape[0] * zoom_factor), int(image.shape[1] * zoom_factor)
-    image = cv2.resize(image, (new_width, new_height))
-
-    # 랜덤하게 이동
-    shift_x = np.random.randint(*shift_range)
-    shift_y = np.random.randint(*shift_range)
-    M = np.array([[1, 0, shift_x], [0, 1, shift_y]], dtype=np.float32)
-    image = cv2.warpAffine(image, M, (new_width, new_height))
-
-    return image
-
-
 class LoadDataset(Dataset):
     def __init__(self, dataset_path, resize=256, cropsize=256, info='train', train=True):
         self.dataset_path = dataset_path
