@@ -223,6 +223,13 @@ def run():
             best_optimal_threshold = thresholds[optimal_idx]
             save_checkpoint(loss_fn, args)
 
+            vessl.register_torch_model(
+                repository_name="cfa-carpet",
+                model_number=1,
+                model_instance=loss_fn,
+                requirements=["torch"],
+            )
+
             tn, fp, fn, tp, acc, f1, fn_idx, fp_idx = cal_acc(scores, gt_list, best_optimal_threshold)
             if acc > best_acc:
                 print('best_acc!')
