@@ -102,7 +102,7 @@ def train(model, ann_file, epochs=1, save_path='weights/model_weights', save_epo
                 vessl.register_torch_model(
                     repository_name=vessl_model_repo,
                     model_number=vessl_model_number,
-                    model_instance=model,
+                    model_instance=model.state_dict(),
                     requirements=["torch"],
                 )
 
