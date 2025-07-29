@@ -117,8 +117,8 @@ if __name__=="__main__":
     parser.add_argument("--epochs", type=int, default=int(os.getenv("EPOCHS", 100)), help="Number of training epochs")
     parser.add_argument("--save_path", type=str, default=os.getenv("SAVE_PATH", "weights/model_weights"), help="Directory to save model weights")
     parser.add_argument("--save_epoch", type=int, default=int(os.getenv("SAVE_EPOCH", 50)), help="Epoch interval to save model weights")
-    parser.add_argument("--vessl_model_repo", type=str, default=int(os.getenv("VESSL_MODEL_REPO", None)), help="Epoch interval to save model weights")
-    parser.add_argument("--vessl_model_number", type=str, default=int(os.getenv("VESSL_MODEL_NUMBER", None)), help="Epoch interval to save model weights")
+    parser.add_argument("--vessl_model_repo", type=str, default=os.getenv("VESSL_MODEL_REPO", None), help="Epoch interval to save model weights")
+    parser.add_argument("--vessl_model_number", type=str, default=os.getenv("VESSL_MODEL_NUMBER", None), help="Epoch interval to save model weights")
 
     args = parser.parse_args()
 
