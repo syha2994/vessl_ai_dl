@@ -55,7 +55,7 @@ def read_dataset(ann_file, img_dir):
     return ann_Dict
 
 
-def train(model, ann_file, epochs=1, save_path='weights/model_weights', save_epoch=50, image_dir=''):
+def train(model, ann_file, epochs=1, save_path='weights/model_weights', save_epoch=50, image_dir='', vessl_model_repo='', vessl_model_number=None):
     # Read Dataset
     ann_Dict = read_dataset(ann_file, image_dir)
 
@@ -97,6 +97,14 @@ def train(model, ann_file, epochs=1, save_path='weights/model_weights', save_epo
             # Save the model's weights after each epoch
             torch.save(model.state_dict(), f"{save_path}{epoch}.pth")
             print(f"Model weights saved to {save_path}{epoch}.pth")
+            if vessl_model_repo:
+                print(f"Registering model to VESSL repository: {vessl_model_repo}")
+                vessl.register_torch_model(
+                    repository_name=vessl_model_repo,
+                    model_number=vessl_model_number,
+                    model_instance=model,
+                    requirements=["torch"],
+                )
 
 
 if __name__=="__main__":
@@ -109,6 +117,8 @@ if __name__=="__main__":
     parser.add_argument("--epochs", type=int, default=int(os.getenv("EPOCHS", 100)), help="Number of training epochs")
     parser.add_argument("--save_path", type=str, default=os.getenv("SAVE_PATH", "weights/model_weights"), help="Directory to save model weights")
     parser.add_argument("--save_epoch", type=int, default=int(os.getenv("SAVE_EPOCH", 50)), help="Epoch interval to save model weights")
+    parser.add_argument("--vessl_model_repo", type=str, default=int(os.getenv("VESSL_MODEL_REPO", None)), help="Epoch interval to save model weights")
+    parser.add_argument("--vessl_model_number", type=str, default=int(os.getenv("VESSL_MODEL_NUMBER", None)), help="Epoch interval to save model weights")
 
     args = parser.parse_args()
 
@@ -117,4 +127,4 @@ if __name__=="__main__":
     images_files = sorted(os.listdir(args.images_dir))
     ann_file = args.ann_file
 
-    train(model=model, ann_file=ann_file, epochs=args.epochs, save_path=args.save_path, save_epoch=args.save_epoch, image_dir=args.images_dir)
+    train(model=model, ann_file=ann_file, epochs=args.epochs, save_path=args.save_path, save_epoch=args.save_epoch, image_dir=args.images_dir, vessl_model_repo=args.vessl_model_repo, vessl_model_number=args.vessl_model_number)
