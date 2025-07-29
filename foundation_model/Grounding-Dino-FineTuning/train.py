@@ -36,7 +36,7 @@ def draw_box_with_label(image, output_path, coordinates, label, color=(0, 0, 255
     cv2.imwrite(output_path, image)
 
 
-def read_dataset(ann_file):
+def read_dataset(ann_file, img_dir):
     ann_Dict= defaultdict(lambda: defaultdict(list))
     with open(ann_file) as file_obj:
         ann_reader= csv.DictReader(file_obj)
@@ -44,7 +44,7 @@ def read_dataset(ann_file):
         # using reader object
         for row in ann_reader:
             #print(row)
-            img_n=os.path.join("multimodal-data/images",row['image_name'])
+            img_n=os.path.join(img_dir, row['image_name'])
             x1=int(row['bbox_x'])
             y1=int(row['bbox_y'])
             x2=x1+int(row['bbox_width'])
@@ -55,9 +55,9 @@ def read_dataset(ann_file):
     return ann_Dict
 
 
-def train(model, ann_file, epochs=1, save_path='weights/model_weights',save_epoch=50):
+def train(model, ann_file, epochs=1, save_path='weights/model_weights', save_epoch=50, image_dir=''):
     # Read Dataset
-    ann_Dict = read_dataset(ann_file)
+    ann_Dict = read_dataset(ann_file, image_dir)
 
     # Add optimizer
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
@@ -117,4 +117,4 @@ if __name__=="__main__":
     images_files = sorted(os.listdir(args.images_dir))
     ann_file = args.ann_file
 
-    train(model=model, ann_file=ann_file, epochs=args.epochs, save_path=args.save_path, save_epoch=args.save_epoch)
+    train(model=model, ann_file=ann_file, epochs=args.epochs, save_path=args.save_path, save_epoch=args.save_epoch, image_dir=args.images_dir)
