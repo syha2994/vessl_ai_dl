@@ -68,8 +68,12 @@ class GroundingDINOInspector:
         if logits.ndim == 2 and logits.shape[1] == 1:
             logits = logits.squeeze(1)
 
+        topk = min(self.params.topk, logits.shape[0])
+        if topk == 0:
+            return torch.empty((0, 4)), torch.empty(0), []
+
         # top-k 인덱스 구하기
-        topk_values, topk_indices = torch.topk(logits, k=self.params.topk)
+        topk_values, topk_indices = torch.topk(logits, k=topk)
 
         # top-k 요소 선택
         topk_boxes = boxes[topk_indices]
