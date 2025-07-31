@@ -201,7 +201,7 @@ class AnalogGaugeInspector:
 
         # SAM 모델을 이용해 아날로그 게이지 마스크 예측
         self.sam_predictor.set_image(cropped_image_np)
-        gauge_mask, _, _ = self.sam_predictor.predict(box=box_gauge, multimask_output=False)
+        gauge_mask, _, _ = self.sam_predictor.predict(multimask_output=False)
         # 게이지 마스크를 시각화
         colored_gauge_mask = np.zeros_like(cropped_image_np_vis, dtype=np.uint8)
         colored_gauge_mask[gauge_mask[0]] = [255, 0, 0]  # 게이지 마스크를 파란색으로 표시
