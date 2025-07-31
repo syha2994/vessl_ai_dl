@@ -199,6 +199,29 @@ class AnalogGaugeInspector:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "No needle boxes detected", (0, 0, 255))
             return
 
+        # SAM 모델을 이용해 아날로그 게이지 마스크 예측
+        self.sam_predictor.set_image(cropped_image_np)
+        gauge_mask, _, _ = self.sam_predictor.predict(box=box_gauge, multimask_output=False)
+        # 게이지 마스크를 시각화
+        colored_gauge_mask = np.zeros_like(cropped_image_np_vis, dtype=np.uint8)
+        colored_gauge_mask[gauge_mask[0]] = [255, 0, 0]  # 게이지 마스크를 파란색으로 표시
+        cropped_image_np_vis = cv2.addWeighted(cropped_image_np_vis, 1.0, colored_gauge_mask, 0.8, 0)
+
+        # 게이지 마스크를 이용해 근사 타원 검출
+        gray_mask = cv2.cvtColor(gauge_mask[0].astype(np.uint8) * 255, cv2.COLOR_GRAY2BGR)
+        gray_mask = cv2.cvtColor(gray_mask, cv2.COLOR_BGR2GRAY)
+        _, thresh_mask = cv2.threshold(gray_mask, 1, 255, cv2.THRESH_BINARY)
+        contours, _ = cv2.findContours(thresh_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if len(contours) == 0:
+            self.handle_missing_detection(cropped_image_np_vis, image_name, "No contours found for gauge", (0, 0, 255))
+            return
+        # 가장 큰 컨투어를 게이지로 간주
+        gauge_contour = max(contours, key=cv2.contourArea)
+        # 근사 타원 검출
+        if len(gauge_contour) >= 5:  # 타원 근사에는 최소 5개의 점이 필요
+            ellipse = cv2.fitEllipse(gauge_contour)
+            cv2.ellipse(cropped_image_np_vis, ellipse, (255, 0, 0), 2)  # 게이지 타원 시각화
+
         # -------- Step3. SAM 모델을 이용해 바늘 마스크 예측 --------
         start_step3 = time.time()
         self.sam_predictor.set_image(cropped_image_np)
