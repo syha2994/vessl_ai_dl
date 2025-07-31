@@ -207,6 +207,23 @@ class AnalogGaugeInspector:
         # 근사 타원 검출
         if len(gauge_contour) >= 5:  # 타원 근사에는 최소 5개의 점이 필요
             ellipse = cv2.fitEllipse(gauge_contour)
+            (center, (major_axis, minor_axis), angle_deg) = ellipse
+
+            # 기울기 비율과 각도 계산
+            tilt_ratio = minor_axis / major_axis
+            tilt_angle_rad = np.arccos(tilt_ratio)
+            tilt_angle_deg = np.degrees(tilt_angle_rad)
+
+            # 시각화
+            cv2.putText(
+                cropped_image_np_vis,
+                f"Tilt: {tilt_angle_deg:.1f} deg",
+                (10, 80),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (255, 255, 255),
+                2
+            )
             cv2.ellipse(cropped_image_np_vis, ellipse, (255, 0, 0), 2)  # 게이지 타원 시각화
 
         # -------- Step3. SAM 모델을 이용해 바늘 마스크 예측 --------
