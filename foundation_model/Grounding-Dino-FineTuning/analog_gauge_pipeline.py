@@ -186,12 +186,13 @@ class AnalogGaugeInspector:
             return
 
         # # SAM 모델을 이용해 아날로그 게이지 마스크 예측
-        # self.sam_predictor.set_image(cropped_image_np)
-        # gauge_mask, _, _ = self.sam_predictor.predict(multimask_output=False)
-        # # 게이지 마스크를 시각화
-        # colored_gauge_mask = np.zeros_like(cropped_image_np_vis, dtype=np.uint8)
-        # colored_gauge_mask[gauge_mask[0]] = [255, 0, 0]  # 게이지 마스크를 파란색으로 표시
-        # cropped_image_np_vis = cv2.addWeighted(cropped_image_np_vis, 1.0, colored_gauge_mask, 0.8, 0)
+        self.sam_predictor.set_image(cropped_image_np)
+        gauge_mask, _, _ = self.sam_predictor.predict(multimask_output=False)
+
+        # 게이지 마스크를 시각화
+        colored_gauge_mask = np.zeros_like(cropped_image_np_vis, dtype=np.uint8)
+        colored_gauge_mask[gauge_mask[0]] = [255, 0, 0]  # 게이지 마스크를 파란색으로 표시
+        cropped_image_np_vis = cv2.addWeighted(cropped_image_np_vis, 1.0, colored_gauge_mask, 0.8, 0)
 
         # 게이지 마스크를 이용해 근사 타원 검출
         gray_mask = cv2.cvtColor(gauge_mask[0].astype(np.uint8) * 255, cv2.COLOR_GRAY2BGR)
