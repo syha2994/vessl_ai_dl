@@ -18,7 +18,8 @@ from paddleocr import PaddleOCR
 @dataclass
 class AnalogGaugeInspectorParams:
     dino_config: str = os.getenv("DINO_CONFIG", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
-    dino_weights: str = os.getenv("DINO_WEIGHTS", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent/GroundingDINO/public/model/groundingdino_swint_ogc.pth")
+    gauge_dino_weights: str = os.getenv("GAUGE_DINO_WEIGHTS", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent/GroundingDINO/public/model/groundingdino_swint_ogc.pth")
+    needle_dino_weights: str = os.getenv("NEEDLE_DINO_WEIGHTS", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent/GroundingDINO/public/model/groundingdino_swint_ogc.pth")
     sam_checkpoint: str = os.getenv("SAM_CHECKPOINT", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent//GroundingDINO/public/model/sam_vit_h_4b8939.pth")
     image_dir: str = os.getenv("IMAGE_DIR", "/Users/seungyeon/CREFLE/2.data/eq0/analog_gauge/various/square_preprocessing")
     result_dir: str = os.getenv("RESULT_DIR", "/Users/seungyeon/CREFLE/2.data/eq0/analog_gauge/various/square_preprocessing/result")
@@ -42,8 +43,10 @@ class AnalogGaugeInspector:
         print(f"Using device: {self.device}")
 
         print("Loading Grounding DINO model...")
-        self.dino_model = load_dino(self.params.dino_config, self.params.dino_weights)
-        self.dino_model.to(self.device)
+        self.gauge_dino_model = load_dino(self.params.dino_config, self.params.gauge_dino_weights)
+        self.gauge_dino_model.to(self.device)
+        self.needle_dino_model = load_dino(self.params.dino_config, self.params.needle_dino_weights)
+        self.needle_dino_model.to(self.device)
 
         print("Loading SAM model...")
         self.sam_model = sam_model_registry["vit_h"](checkpoint=self.params.sam_checkpoint)
@@ -67,23 +70,6 @@ class AnalogGaugeInspector:
         scaled_boxes = boxes * scale_factors
         boxes_xyxy = box_convert(scaled_boxes, in_fmt="cxcywh", out_fmt="xyxy").cpu().numpy()
         return boxes_xyxy
-
-    def predict_dino_model(self, image_tensor, caption, box_threshold, text_threshold):
-        """
-        Grounding DINO 모델을 사용하여 이미지에서 객체를 예측합니다.
-        :param image_tensor: 전처리된 이미지 텐서
-        :param caption: 객체 캡션 (예: "analog_gauge" 또는 "needle pointer")
-        :return: 예측된 박스, 로짓, 문구
-        """
-        boxes, logits, phrases = dino_predict(
-            model=self.dino_model,
-            image=image_tensor,
-            caption=caption,
-            box_threshold=box_threshold,
-            text_threshold=text_threshold,
-            device=self.device
-        )
-        return boxes, logits, phrases
 
     @staticmethod
     def select_highest_confidence_box(boxes, logits):
@@ -151,7 +137,7 @@ class AnalogGaugeInspector:
         start_step1 = time.time()
         image_tensor = Model.preprocess_image(image_bgr)
         boxes_gauge, logits_gauge, phrases_gauge = dino_predict(
-            model=self.dino_model,
+            model=self.gauge_dino_model,
             image=image_tensor,
             caption=self.params.analog_gauge_caption,
             box_threshold=self.params.box_threshold_gauge,
@@ -176,7 +162,7 @@ class AnalogGaugeInspector:
         start_step2 = time.time()
         cropped_image_tensor = Model.preprocess_image(cropped_image_np)
         boxes_needle, logits_needle, phrases_needle = dino_predict(
-            model=self.dino_model,
+            model=self.needle_dino_model,
             image=cropped_image_tensor,
             caption=self.params.needle_caption,
             box_threshold=self.params.box_threshold_needle,
