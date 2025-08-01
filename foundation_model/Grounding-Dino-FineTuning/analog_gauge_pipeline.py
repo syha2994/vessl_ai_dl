@@ -158,36 +158,15 @@ class AnalogGaugeInspector:
             self.handle_missing_detection(image_bgr, image_name, "Invalid crop box for gauge", (0, 0, 255))
             return
 
-        # -------- Step2. Grounding DINO 를 이용해 바늘 객체 탐지 --------
-        start_step2 = time.time()
-        cropped_image_tensor = Model.preprocess_image(cropped_image_np)
-        boxes_needle, logits_needle, phrases_needle = dino_predict(
-            model=self.needle_dino_model,
-            image=cropped_image_tensor,
-            caption=self.params.needle_caption,
-            box_threshold=self.params.box_threshold_needle,
-            text_threshold=self.params.text_threshold_needle,
-            device=self.device
-        )
-        print(f"Step2 (Needle Detection) time: {time.time() - start_step2:.3f}s")
         cropped_image_np_vis = cropped_image_np.copy()
-
-        if boxes_needle.shape[0] > 0:
-            selected_box = self.select_valid_needle_box(boxes_needle, logits_needle, cropped_image_np)
-            if selected_box is None:
-                self.handle_missing_detection(cropped_image_np_vis, image_name, "No suitable needle box found", (0, 0, 255))
-                return
-            else:
-                box_needle_xyxy = self.scale_and_convert_boxes_to_xyxy(selected_box, cropped_image_np)
-                x1, y1, x2, y2 = box_needle_xyxy.astype(int)
-                cv2.rectangle(cropped_image_np_vis, (x1, y1), (x2, y2), color=(0, 200, 0), thickness=2)
-        else:
-            self.handle_missing_detection(cropped_image_np_vis, image_name, "No needle boxes detected", (0, 0, 255))
-            return
+        gauge_cx, gauge_cy = cropped_image_np.shape[1] // 2, cropped_image_np.shape[0] // 2
 
         # # SAM 모델을 이용해 아날로그 게이지 마스크 예측
         self.sam_predictor.set_image(cropped_image_np)
-        gauge_mask, _, _ = self.sam_predictor.predict(multimask_output=False)
+        gauge_masks, _, _ = self.sam_predictor.predict(point_coords=np.array([[gauge_cx, gauge_cy]]), multimask_output=True)
+        mask_areas = np.sum(gauge_masks, axis=(1, 2))  # shape = (N,)
+        largest_mask_idx = np.argmax(mask_areas)
+        gauge_mask = gauge_masks[largest_mask_idx]  # shape = (H, W)
 
         # 게이지 마스크를 시각화
         colored_gauge_mask = np.zeros_like(cropped_image_np_vis, dtype=np.uint8)
@@ -207,24 +186,34 @@ class AnalogGaugeInspector:
         # 근사 타원 검출
         if len(gauge_contour) >= 5:  # 타원 근사에는 최소 5개의 점이 필요
             ellipse = cv2.fitEllipse(gauge_contour)
-            (center, (major_axis, minor_axis), angle_deg) = ellipse
-
-            # 기울기 비율과 각도 계산
-            tilt_ratio = minor_axis / major_axis
-            tilt_angle_rad = np.arccos(tilt_ratio)
-            tilt_angle_deg = np.degrees(tilt_angle_rad)
-
             # 시각화
-            cv2.putText(
-                cropped_image_np_vis,
-                f"Tilt: {tilt_angle_deg:.1f} deg",
-                (10, 80),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (255, 255, 255),
-                2
-            )
             cv2.ellipse(cropped_image_np_vis, ellipse, (255, 0, 0), 2)  # 게이지 타원 시각화
+
+        # -------- Step2. Grounding DINO 를 이용해 바늘 객체 탐지 --------
+        start_step2 = time.time()
+        cropped_image_tensor = Model.preprocess_image(cropped_image_np)
+        boxes_needle, logits_needle, phrases_needle = dino_predict(
+            model=self.needle_dino_model,
+            image=cropped_image_tensor,
+            caption=self.params.needle_caption,
+            box_threshold=self.params.box_threshold_needle,
+            text_threshold=self.params.text_threshold_needle,
+            device=self.device
+        )
+        print(f"Step2 (Needle Detection) time: {time.time() - start_step2:.3f}s")
+
+        if boxes_needle.shape[0] > 0:
+            selected_box = self.select_valid_needle_box(boxes_needle, logits_needle, cropped_image_np)
+            if selected_box is None:
+                self.handle_missing_detection(cropped_image_np_vis, image_name, "No suitable needle box found", (0, 0, 255))
+                return
+            else:
+                box_needle_xyxy = self.scale_and_convert_boxes_to_xyxy(selected_box, cropped_image_np)
+                x1, y1, x2, y2 = box_needle_xyxy.astype(int)
+                cv2.rectangle(cropped_image_np_vis, (x1, y1), (x2, y2), color=(0, 200, 0), thickness=2)
+        else:
+            self.handle_missing_detection(cropped_image_np_vis, image_name, "No needle boxes detected", (0, 0, 255))
+            return
 
         # -------- Step3. SAM 모델을 이용해 바늘 마스크 예측 --------
         start_step3 = time.time()
