@@ -182,7 +182,7 @@ class AnalogGaugeInspector:
         cropped_image_np_vis = cv2.addWeighted(cropped_image_np_vis, 1.0, colored_gauge_mask, 0.8, 0)
 
         # 게이지 마스크를 이용해 근사 타원 검출
-        gray_mask = cv2.cvtColor(gauge_mask[0].astype(np.uint8) * 255, cv2.COLOR_GRAY2BGR)
+        gray_mask = cv2.cvtColor(gauge_mask.astype(np.uint8) * 255, cv2.COLOR_GRAY2BGR)
         gray_mask = cv2.cvtColor(gray_mask, cv2.COLOR_BGR2GRAY)
         _, thresh_mask = cv2.threshold(gray_mask, 1, 255, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(thresh_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
