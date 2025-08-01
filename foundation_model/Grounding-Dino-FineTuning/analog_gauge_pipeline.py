@@ -163,7 +163,15 @@ class AnalogGaugeInspector:
 
         # # SAM 모델을 이용해 아날로그 게이지 마스크 예측
         self.sam_predictor.set_image(cropped_image_np)
-        gauge_masks, _, _ = self.sam_predictor.predict(point_coords=np.array([[gauge_cx, gauge_cy]]), multimask_output=True)
+        point_coords = np.array([[gauge_cx, gauge_cy]])
+        point_labels = np.array([1])  # foreground
+
+        gauge_masks, _, _ = self.sam_predictor.predict(
+            point_coords=point_coords,
+            point_labels=point_labels,
+            multimask_output=True
+        )
+
         mask_areas = np.sum(gauge_masks, axis=(1, 2))  # shape = (N,)
         largest_mask_idx = np.argmax(mask_areas)
         gauge_mask = gauge_masks[largest_mask_idx]  # shape = (H, W)
