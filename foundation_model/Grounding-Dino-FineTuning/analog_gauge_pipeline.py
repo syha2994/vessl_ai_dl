@@ -110,6 +110,29 @@ class AnalogGaugeInspector:
         cv2.putText(image_np, message, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0, text_color, 2)
         cv2.imwrite(os.path.join(self.params.result_dir, f"ocr_vis_{image_name}"), image_np)
 
+    def make_cannyedge_image(self, image):
+        """
+        입력 이미지에서 Canny 엣지를 검출하고 그 결과를 이미지에 그려 반환합니다.
+        :param image: BGR 이미지 (예: cropped_image_np)
+        :return: Canny 엣지가 그려진 이미지
+        """
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        edges = cv2.Canny(blurred, 50, 150)
+        return edges
+
+    def find_ellipse_at_edge_image(self, edge_image):
+        contours, _ = cv2.findContours(edge_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if len(contours) == 0:
+            return None
+        # 가장 큰 컨투어를 찾습니다.
+        largest_contour = max(contours, key=cv2.contourArea)
+        if len(largest_contour) < 5:
+            return None
+        # 컨투어에서 타원을 피팅합니다.
+        ellipse = cv2.fitEllipse(largest_contour)
+        return ellipse
+
     def process_image(self, image_name):
         image_path = os.path.join(self.params.image_dir, image_name)
         image_bgr = cv2.imread(image_path)
@@ -159,43 +182,12 @@ class AnalogGaugeInspector:
             return
 
         cropped_image_np_vis = cropped_image_np.copy()
-        gauge_cx, gauge_cy = cropped_image_np.shape[1] // 2, cropped_image_np.shape[0] // 2
 
-        # # SAM 모델을 이용해 아날로그 게이지 마스크 예측
-        self.sam_predictor.set_image(cropped_image_np)
-        point_coords = np.array([[gauge_cx, gauge_cy]])
-        point_labels = np.array([1])  # foreground
-
-        gauge_masks, _, _ = self.sam_predictor.predict(
-            point_coords=point_coords,
-            point_labels=point_labels,
-            multimask_output=True
-        )
-
-        mask_areas = np.sum(gauge_masks, axis=(1, 2))  # shape = (N,)
-        largest_mask_idx = np.argmax(mask_areas)
-        gauge_mask = gauge_masks[largest_mask_idx]  # shape = (H, W)
-
-        # 게이지 마스크를 시각화
-        colored_gauge_mask = np.zeros_like(cropped_image_np_vis, dtype=np.uint8)
-        colored_gauge_mask[gauge_mask] = [255, 0, 0]  # 게이지 마스크를 파란색으로 표시
-        cropped_image_np_vis = cv2.addWeighted(cropped_image_np_vis, 1.0, colored_gauge_mask, 0.8, 0)
-
-        # 게이지 마스크를 이용해 근사 타원 검출
-        gray_mask = cv2.cvtColor(gauge_mask.astype(np.uint8) * 255, cv2.COLOR_GRAY2BGR)
-        gray_mask = cv2.cvtColor(gray_mask, cv2.COLOR_BGR2GRAY)
-        _, thresh_mask = cv2.threshold(gray_mask, 1, 255, cv2.THRESH_BINARY)
-        contours, _ = cv2.findContours(thresh_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if len(contours) == 0:
-            self.handle_missing_detection(cropped_image_np_vis, image_name, "No contours found for gauge", (0, 0, 255))
-            return
-        # 가장 큰 컨투어를 게이지로 간주
-        gauge_contour = max(contours, key=cv2.contourArea)
-        # 근사 타원 검출
-        if len(gauge_contour) >= 5:  # 타원 근사에는 최소 5개의 점이 필요
-            ellipse = cv2.fitEllipse(gauge_contour)
-            # 시각화
-            cv2.ellipse(cropped_image_np_vis, ellipse, (255, 0, 0), 2)  # 게이지 타원 시각화
+        edge_image = self.make_cannyedge_image(cropped_image_np)
+        ellipse = self.find_ellipse_at_edge_image(edge_image)
+        if ellipse is not None:
+            cv2.ellipse(cropped_image_np_vis, ellipse, (0, 255, 255), 2)
+            print(f"Detected ellipse at {ellipse[0]} with axes {ellipse[1]} and angle {ellipse[2]}")
 
         # -------- Step2. Grounding DINO 를 이용해 바늘 객체 탐지 --------
         start_step2 = time.time()
@@ -364,14 +356,22 @@ class AnalogGaugeInspector:
             import vessl
             vessl.init()
 
-            # 원본 이미지와 결과 이미지 나란히 붙이기 (좌우 연결)
-            original_resized = cv2.resize(cropped_image_np, (cropped_image_np_vis.shape[1], cropped_image_np_vis.shape[0]))
-            concat_image = cv2.hconcat([original_resized, cropped_image_np_vis])
-            # VESSL 로그에 업로드 (키명 명확화, 캡션에 입력 이미지명 명시)
+            vessl.log({
+                "edge_image": vessl.Image(
+                    data=edge_image,
+                    caption=f"{image_name} - Canny Edge Detection"
+                )
+            })
             vessl.log({
                 "analog_gauge_result": vessl.Image(
-                    data=concat_image[..., ::-1],
-                    caption=f"{image_name} - Left: input / Right: result"
+                    data=cropped_image_np_vis,
+                    caption=f"{image_name} - Analog Gauge Result"
+                )
+            })
+            vessl.log({
+                "original_image": vessl.Image(
+                    data=image_bgr,
+                    caption=f"{image_name} - Original Image"
                 )
             })
             # -----------------------------------------------------------
