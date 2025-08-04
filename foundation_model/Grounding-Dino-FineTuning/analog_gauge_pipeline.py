@@ -3,6 +3,7 @@ import cv2
 import time
 import torch
 import numpy as np
+import csv
 from dataclasses import dataclass
 from torchvision.ops import box_convert
 
@@ -18,7 +19,8 @@ from paddleocr import PaddleOCR
 @dataclass
 class AnalogGaugeInspectorParams:
     dino_config: str = os.getenv("DINO_CONFIG", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
-    dino_weights: str = os.getenv("DINO_WEIGHTS", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent/GroundingDINO/public/model/groundingdino_swint_ogc.pth")
+    gauge_dino_weights: str = os.getenv("GAUGE_DINO_WEIGHTS", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent/GroundingDINO/public/model/groundingdino_swint_ogc.pth")
+    needle_dino_weights: str = os.getenv("NEEDLE_DINO_WEIGHTS", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent/GroundingDINO/public/model/groundingdino_swint_ogc.pth")
     sam_checkpoint: str = os.getenv("SAM_CHECKPOINT", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent//GroundingDINO/public/model/sam_vit_h_4b8939.pth")
     image_dir: str = os.getenv("IMAGE_DIR", "/Users/seungyeon/CREFLE/2.data/eq0/analog_gauge/various/square_preprocessing")
     result_dir: str = os.getenv("RESULT_DIR", "/Users/seungyeon/CREFLE/2.data/eq0/analog_gauge/various/square_preprocessing/result")
@@ -42,8 +44,10 @@ class AnalogGaugeInspector:
         print(f"Using device: {self.device}")
 
         print("Loading Grounding DINO model...")
-        self.dino_model = load_dino(self.params.dino_config, self.params.dino_weights)
-        self.dino_model.to(self.device)
+        self.gauge_dino_model = load_dino(self.params.dino_config, self.params.gauge_dino_weights)
+        self.gauge_dino_model.to(self.device)
+        self.needle_dino_model = load_dino(self.params.dino_config, self.params.needle_dino_weights)
+        self.needle_dino_model.to(self.device)
 
         print("Loading SAM model...")
         self.sam_model = sam_model_registry["vit_h"](checkpoint=self.params.sam_checkpoint)
@@ -68,23 +72,6 @@ class AnalogGaugeInspector:
         boxes_xyxy = box_convert(scaled_boxes, in_fmt="cxcywh", out_fmt="xyxy").cpu().numpy()
         return boxes_xyxy
 
-    def predict_dino_model(self, image_tensor, caption, box_threshold, text_threshold):
-        """
-        Grounding DINO 모델을 사용하여 이미지에서 객체를 예측합니다.
-        :param image_tensor: 전처리된 이미지 텐서
-        :param caption: 객체 캡션 (예: "analog_gauge" 또는 "needle pointer")
-        :return: 예측된 박스, 로짓, 문구
-        """
-        boxes, logits, phrases = dino_predict(
-            model=self.dino_model,
-            image=image_tensor,
-            caption=caption,
-            box_threshold=box_threshold,
-            text_threshold=text_threshold,
-            device=self.device
-        )
-        return boxes, logits, phrases
-
     @staticmethod
     def select_highest_confidence_box(boxes, logits):
         if boxes.shape[0] > 0:
@@ -102,8 +89,8 @@ class AnalogGaugeInspector:
 
         image_area = image.shape[0] * image.shape[1]
         height, width = image.shape[:2]
-        margin_x = width * 0.05
-        margin_y = height * 0.05
+        margin_x = width * 0.01
+        margin_y = height * 0.01
         sorted_indices = torch.argsort(logits, descending=True)
 
         for idx in sorted_indices:
@@ -124,6 +111,29 @@ class AnalogGaugeInspector:
         cv2.putText(image_np, message, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0, text_color, 2)
         cv2.imwrite(os.path.join(self.params.result_dir, f"ocr_vis_{image_name}"), image_np)
 
+    def make_cannyedge_image(self, image):
+        """
+        입력 이미지에서 Canny 엣지를 검출하고 그 결과를 이미지에 그려 반환합니다.
+        :param image: BGR 이미지 (예: cropped_image_np)
+        :return: Canny 엣지가 그려진 이미지
+        """
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        edges = cv2.Canny(blurred, 50, 150)
+        return edges
+
+    def find_ellipse_at_edge_image(self, edge_image):
+        contours, _ = cv2.findContours(edge_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if len(contours) == 0:
+            return None
+        # 가장 큰 컨투어를 찾습니다.
+        largest_contour = max(contours, key=cv2.contourArea)
+        if len(largest_contour) < 5:
+            return None
+        # 컨투어에서 타원을 피팅합니다.
+        ellipse = cv2.fitEllipse(largest_contour)
+        return ellipse
+
     def process_image(self, image_name):
         image_path = os.path.join(self.params.image_dir, image_name)
         image_bgr = cv2.imread(image_path)
@@ -140,7 +150,10 @@ class AnalogGaugeInspector:
         elif self.params.mode == 'filename':
             try:
                 name_part = os.path.splitext(image_name)[0]  # remove extension
-                min_val, max_val, tick_interval, _ = map(float, name_part.split("_"))
+                parts = name_part.split("_")
+                if len(parts) < 4:
+                    raise ValueError("Filename does not contain enough parts for parameter parsing.")
+                min_val, max_val, tick_interval, real_value = map(float, parts[:4])
                 self.params.min_value = min_val
                 self.params.max_value = max_val
                 self.params.tick_interval = tick_interval
@@ -151,7 +164,7 @@ class AnalogGaugeInspector:
         start_step1 = time.time()
         image_tensor = Model.preprocess_image(image_bgr)
         boxes_gauge, logits_gauge, phrases_gauge = dino_predict(
-            model=self.dino_model,
+            model=self.gauge_dino_model,
             image=image_tensor,
             caption=self.params.analog_gauge_caption,
             box_threshold=self.params.box_threshold_gauge,
@@ -172,11 +185,19 @@ class AnalogGaugeInspector:
             self.handle_missing_detection(image_bgr, image_name, "Invalid crop box for gauge", (0, 0, 255))
             return
 
+        cropped_image_np_vis = cropped_image_np.copy()
+
+        edge_image = self.make_cannyedge_image(cropped_image_np)
+        ellipse = self.find_ellipse_at_edge_image(edge_image)
+        if ellipse is not None:
+            cv2.ellipse(cropped_image_np_vis, ellipse, (0, 255, 255), 2)
+            print(f"Detected ellipse at {ellipse[0]} with axes {ellipse[1]} and angle {ellipse[2]}")
+
         # -------- Step2. Grounding DINO 를 이용해 바늘 객체 탐지 --------
         start_step2 = time.time()
         cropped_image_tensor = Model.preprocess_image(cropped_image_np)
         boxes_needle, logits_needle, phrases_needle = dino_predict(
-            model=self.dino_model,
+            model=self.needle_dino_model,
             image=cropped_image_tensor,
             caption=self.params.needle_caption,
             box_threshold=self.params.box_threshold_needle,
@@ -184,7 +205,6 @@ class AnalogGaugeInspector:
             device=self.device
         )
         print(f"Step2 (Needle Detection) time: {time.time() - start_step2:.3f}s")
-        cropped_image_np_vis = cropped_image_np.copy()
 
         if boxes_needle.shape[0] > 0:
             selected_box = self.select_valid_needle_box(boxes_needle, logits_needle, cropped_image_np)
@@ -295,7 +315,7 @@ class AnalogGaugeInspector:
         if needle_point_2 is None:
             needle_point_2, dist2 = distances[1]
 
-        if abs(dist1 - dist2) / max(dist1, dist2) > 0.1:
+        if abs(dist1 - dist2) / max(dist1, dist2) > 0.03:
             needle_point = needle_point_1
         else:
             print('a')
@@ -340,34 +360,75 @@ class AnalogGaugeInspector:
             import vessl
             vessl.init()
 
-            # 원본 이미지와 결과 이미지 나란히 붙이기 (좌우 연결)
-            original_resized = cv2.resize(cropped_image_np, (cropped_image_np_vis.shape[1], cropped_image_np_vis.shape[0]))
-            concat_image = cv2.hconcat([original_resized, cropped_image_np_vis])
-            # VESSL 로그에 업로드 (키명 명확화, 캡션에 입력 이미지명 명시)
+            vessl.log({
+                "edge_image": vessl.Image(
+                    data=edge_image,
+                    caption=f"{image_name} - Canny Edge Detection"
+                )
+            })
             vessl.log({
                 "analog_gauge_result": vessl.Image(
-                    data=concat_image[..., ::-1],
-                    caption=f"{image_name} - Left: input / Right: result"
+                    data=cropped_image_np_vis,
+                    caption=f"{image_name} - Analog Gauge Result"
+                )
+            })
+            vessl.log({
+                "original_image": vessl.Image(
+                    data=image_bgr,
+                    caption=f"{image_name} - Original Image"
                 )
             })
             # -----------------------------------------------------------
+            # --- 정확도 계산 및 결과 반환 ---
+            try:
+                s, e, _, r = map(float, os.path.splitext(image_name)[0].split("_"))
+                R = e - s
+                D = abs(estimated_value - r)
+                E = D / R
+                A = 1 - E
+                print(f"[Result] {image_name} | Real: {r} | Predicted: {estimated_value:.2f} | Accuracy: {A*100:.2f}%")
+                return image_name, r, estimated_value, A * 100
+            except Exception as ex:
+                print(f"정확도 계산 실패: {ex}")
+                return None
         else:
             print("Not enough valid OCR values for interpolation.")
         print(f"Step7 (Angle & Value Estimation) time: {time.time() - start_step7:.3f}s")
+        return None
 
     def run(self):
         import torch
         print('torch.cuda.is_available: ', torch.cuda.is_available())
         print('torch.cuda.get_device_name: ', torch.cuda.get_device_name(0))
 
-        for image_name in os.listdir(self.params.image_dir):
-            if not image_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp")):
-                continue
-            print('##################################################')
-            start_total = time.time()
-            self.process_image(image_name)
-            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
-            print('##################################################')
+        csv_output_path = os.path.join(self.params.result_dir, "accuracy_results.csv")
+        with open(csv_output_path, mode='w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(["Image Name", "Real Value", "Predicted Value", "Accuracy (%)"])
+
+            total_accuracy = 0
+            count = 0
+
+            for image_name in os.listdir(self.params.image_dir):
+                if not image_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp")):
+                    continue
+                print('##################################################')
+                start_total = time.time()
+                result = self.process_image(image_name)
+                print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
+                print('##################################################')
+
+                if result is not None:
+                    image_name, real, predicted, accuracy = result
+                    writer.writerow([image_name, real, f"{predicted:.2f}", f"{accuracy:.2f}"])
+                    total_accuracy += accuracy
+                    count += 1
+
+            if count > 0:
+                final_accuracy = total_accuracy / count
+                print(f"\n✅ 모든 이미지 처리 완료! 평균 정확도: {final_accuracy:.2f}%")
+            else:
+                print("\n⚠️ 처리된 유효한 이미지가 없습니다.")
 
 
 if __name__ == "__main__":
