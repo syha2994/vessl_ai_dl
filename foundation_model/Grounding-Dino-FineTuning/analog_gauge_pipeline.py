@@ -341,6 +341,16 @@ class AnalogGaugeInspector:
             values = np.array(values)
             angles = np.unwrap(np.array(angles))  # angle discontinuity 보정
 
+            # 방향 보정: 게이지가 시계방향으로 증가하는지 확인
+            angle_diffs = np.diff(angles)
+            value_diffs = np.diff(values)
+            direction = np.sign(np.sum(angle_diffs * value_diffs))  # +1: 시계방향, -1: 반시계방향
+
+            if direction == -1:
+                # 반시계방향이면 각도를 뒤집어서 보간 함수 생성
+                angles = angles[::-1]
+                values = values[::-1]
+
             # 각도에 대한 보간 함수 생성
             from scipy.interpolate import interp1d
             angle_to_value = interp1d(angles, values, kind='linear', fill_value='extrapolate')
