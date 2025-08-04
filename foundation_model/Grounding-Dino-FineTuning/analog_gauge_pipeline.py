@@ -315,7 +315,7 @@ class AnalogGaugeInspector:
         if needle_point_2 is None:
             needle_point_2, dist2 = distances[1]
 
-        if abs(dist1 - dist2) / max(dist1, dist2) > 0.1:
+        if abs(dist1 - dist2) / max(dist1, dist2) > 0.03:
             needle_point = needle_point_1
         else:
             print('a')
