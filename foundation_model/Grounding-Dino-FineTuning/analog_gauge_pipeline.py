@@ -150,7 +150,10 @@ class AnalogGaugeInspector:
         elif self.params.mode == 'filename':
             try:
                 name_part = os.path.splitext(image_name)[0]  # remove extension
-                min_val, max_val, tick_interval, _ = map(float, name_part.split("_"))
+                parts = name_part.split("_")
+                if len(parts) < 4:
+                    raise ValueError("Filename does not contain enough parts for parameter parsing.")
+                min_val, max_val, tick_interval, real_value = map(float, parts[:4])
                 self.params.min_value = min_val
                 self.params.max_value = max_val
                 self.params.tick_interval = tick_interval
