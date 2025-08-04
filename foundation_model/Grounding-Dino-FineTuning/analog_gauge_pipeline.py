@@ -3,6 +3,7 @@ import cv2
 import time
 import torch
 import numpy as np
+import csv
 from dataclasses import dataclass
 from torchvision.ops import box_convert
 
@@ -375,23 +376,56 @@ class AnalogGaugeInspector:
                 )
             })
             # -----------------------------------------------------------
+            # --- 정확도 계산 및 결과 반환 ---
+            try:
+                s, e, _, r = map(float, os.path.splitext(image_name)[0].split("_"))
+                R = e - s
+                D = abs(estimated_value - r)
+                E = D / R
+                A = 1 - E
+                print(f"[Result] {image_name} | Real: {r} | Predicted: {estimated_value:.2f} | Accuracy: {A*100:.2f}%")
+                return image_name, r, estimated_value, A * 100
+            except Exception as ex:
+                print(f"정확도 계산 실패: {ex}")
+                return None
         else:
             print("Not enough valid OCR values for interpolation.")
         print(f"Step7 (Angle & Value Estimation) time: {time.time() - start_step7:.3f}s")
+        return None
 
     def run(self):
         import torch
         print('torch.cuda.is_available: ', torch.cuda.is_available())
         print('torch.cuda.get_device_name: ', torch.cuda.get_device_name(0))
 
-        for image_name in os.listdir(self.params.image_dir):
-            if not image_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp")):
-                continue
-            print('##################################################')
-            start_total = time.time()
-            self.process_image(image_name)
-            print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
-            print('##################################################')
+        csv_output_path = os.path.join(self.params.result_dir, "accuracy_results.csv")
+        with open(csv_output_path, mode='w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(["Image Name", "Real Value", "Predicted Value", "Accuracy (%)"])
+
+            total_accuracy = 0
+            count = 0
+
+            for image_name in os.listdir(self.params.image_dir):
+                if not image_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp")):
+                    continue
+                print('##################################################')
+                start_total = time.time()
+                result = self.process_image(image_name)
+                print(f"Total time for {image_name}: {time.time() - start_total:.3f}s")
+                print('##################################################')
+
+                if result is not None:
+                    image_name, real, predicted, accuracy = result
+                    writer.writerow([image_name, real, f"{predicted:.2f}", f"{accuracy:.2f}"])
+                    total_accuracy += accuracy
+                    count += 1
+
+            if count > 0:
+                final_accuracy = total_accuracy / count
+                print(f"\n✅ 모든 이미지 처리 완료! 평균 정확도: {final_accuracy:.2f}%")
+            else:
+                print("\n⚠️ 처리된 유효한 이미지가 없습니다.")
 
 
 if __name__ == "__main__":
