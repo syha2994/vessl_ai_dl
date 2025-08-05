@@ -34,6 +34,8 @@ class AnalogGaugeInspectorParams:
     analog_gauge_caption: str = os.getenv("ANALOG_GAUGE_CAPTION", "analog gauge dial")
     needle_caption: str = os.getenv("NEEDLE_CAPTION", "needle pointer, clock hands, needle")
     mode: str = os.getenv("MODE", "filename")
+    paddle_use_textline_orientation: bool = bool(os.getenv(os.getenv("PADDLE_USE_TEXTLINE_ORIENTATION", False)))
+    paddle_use_doc_unwarping: bool = bool(os.getenv(os.getenv("PADDLE_USE_UNWARPING", False)))
 
 
 class AnalogGaugeInspector:
@@ -55,7 +57,10 @@ class AnalogGaugeInspector:
         self.sam_predictor = SamPredictor(self.sam_model)
 
         print("Initializing PaddleOCR reader...")
-        self.paddle_ocr = PaddleOCR(lang='en', use_textline_orientation=False)
+        self.paddle_ocr = PaddleOCR(
+            use_textline_orientation=self.params.paddle_use_textline_orientation,
+            use_doc_unwarping=self.params.paddle_use_doc_unwarping
+        )
 
     @staticmethod
     def scale_and_convert_boxes_to_xyxy(boxes: torch.Tensor, image: np.ndarray) -> np.ndarray:
