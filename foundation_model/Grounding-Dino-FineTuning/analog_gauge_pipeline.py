@@ -34,8 +34,8 @@ class AnalogGaugeInspectorParams:
     analog_gauge_caption: str = os.getenv("ANALOG_GAUGE_CAPTION", "analog gauge dial")
     needle_caption: str = os.getenv("NEEDLE_CAPTION", "needle pointer, clock hands, needle")
     mode: str = os.getenv("MODE", "filename")
-    paddle_use_textline_orientation: bool = bool(os.getenv(os.getenv("PADDLE_USE_TEXTLINE_ORIENTATION", False)))
-    paddle_use_doc_unwarping: bool = bool(os.getenv(os.getenv("PADDLE_USE_UNWARPING", False)))
+    paddle_use_textline_orientation: bool = bool(os.getenv("PADDLE_USE_TEXTLINE_ORIENTATION", False))
+    paddle_use_doc_unwarping: bool = bool(os.getenv("PADDLE_USE_UNWARPING", False))
 
 
 class AnalogGaugeInspector:
