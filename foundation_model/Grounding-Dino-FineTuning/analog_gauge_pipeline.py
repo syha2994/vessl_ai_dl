@@ -36,6 +36,7 @@ class AnalogGaugeInspectorParams:
     mode: str = os.getenv("MODE", "filename")
     paddle_use_textline_orientation: bool = bool(os.getenv("PADDLE_USE_TEXTLINE_ORIENTATION", False))
     paddle_use_doc_unwarping: bool = bool(os.getenv("PADDLE_USE_UNWARPING", False))
+    paddle_lang: str = os.getenv("PADDLE_LANG", 'ch')
 
 
 class AnalogGaugeInspector:
@@ -59,7 +60,8 @@ class AnalogGaugeInspector:
         print("Initializing PaddleOCR reader...")
         self.paddle_ocr = PaddleOCR(
             use_textline_orientation=self.params.paddle_use_textline_orientation,
-            use_doc_unwarping=self.params.paddle_use_doc_unwarping
+            use_doc_unwarping=self.params.paddle_use_doc_unwarping,
+            lang=self.params.paddle_lang
         )
 
     @staticmethod
