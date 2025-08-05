@@ -264,6 +264,10 @@ class AnalogGaugeInspector:
         ocr_result_with_boxes = self.paddle_ocr.ocr(cropped_image_np)[0]
         print(f"Step5 (OCR) time: {time.time() - start_step5:.3f}s")
 
+        if ocr_result_with_boxes is None:
+            self.handle_missing_detection(cropped_image_np_vis, image_name, "OCR failed or returned None", (0, 0, 255))
+            return
+
         expected_values = np.arange(self.params.min_value, self.params.max_value + 1e-5, self.params.tick_interval)
         expected_texts = set([str(int(v)) if v == int(v) else f"{v:.1f}" for v in expected_values])
 
