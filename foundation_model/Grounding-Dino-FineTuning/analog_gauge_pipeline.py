@@ -350,32 +350,26 @@ class AnalogGaugeInspector:
         needle_angle = np.arctan2(needle_point[0][1] - gauge_axis[1], needle_point[0][0] - gauge_axis[0])
 
         if len(value_angles) >= 2:
-            # 각도 정렬
-            value_angles.sort(key=lambda x: x[1])
-            values, angles = zip(*value_angles)
-            values = np.array(values)
-            angles = np.unwrap(np.array(angles))  # angle discontinuity 보정
-
-            # 게이지 값 추정 로직 (방향성과 최소/최대 값 고려)
-            # 참고: value_angles는 [(value, angle), ...] 형식이며 최소 2개 이상 존재함
-
-            # 가장 작은 값과 가장 큰 값을 갖는 두 OCR 값 사용
-            value_angles.sort(key=lambda x: x[0])
-            min_value, angle_min = value_angles[0]
-            max_value, angle_max = value_angles[-1]
+            # 바늘 끝점과 가장 가까운 두 OCR 값을 선택
+            needle_point_xy = np.array(needle_point[0])
+            value_angles.sort(key=lambda va: np.linalg.norm(
+                needle_point_xy - np.array([
+                    gauge_axis[0] + 100 * np.cos(va[1]),
+                    gauge_axis[1] + 100 * np.sin(va[1])
+                ])
+            ))
+            nearest1, nearest2 = value_angles[:2]
+            value1, angle1 = nearest1
+            value2, angle2 = nearest2
 
             # 바늘 각도를 unwrap하여 범위 문제 보정
-            needle_angle_unwrapped = np.unwrap([angle_min, needle_angle])[1]
-            angle_min_unwrapped = angle_min
-            angle_max_unwrapped = np.unwrap([angle_min, angle_max])[1]
-
-            # 전체 각도 범위 및 바늘 각도의 상대 위치 계산
-            angle_range = angle_max_unwrapped - angle_min_unwrapped
-            needle_relative_angle = needle_angle_unwrapped - angle_min_unwrapped
+            needle_angle_unwrapped = np.unwrap([angle1, needle_angle])[1]
+            angle1_unwrapped = angle1
+            angle2_unwrapped = np.unwrap([angle1, angle2])[1]
+            angle_range = angle2_unwrapped - angle1_unwrapped
+            needle_relative_angle = needle_angle_unwrapped - angle1_unwrapped
             ratio = needle_relative_angle / angle_range
-
-            # 게이지 값 예측 (min + 비율 * 전체값 범위)
-            estimated_value = min_value + ratio * (max_value - min_value)
+            estimated_value = value1 + ratio * (value2 - value1)
 
             print(f"Estimated gauge value: {estimated_value:.3f}")
             cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
