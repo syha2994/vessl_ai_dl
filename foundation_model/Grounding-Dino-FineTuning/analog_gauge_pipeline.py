@@ -366,7 +366,7 @@ class AnalogGaugeInspector:
         start_step7 = time.time()
         value_list.sort(key=lambda x: x[0])
 
-        closest_item = min(value_list, key=lambda item: self.euclidean_distance(item[1], item[2], gauge_axis[0], gauge_axis[1]))
+        closest_item = min(value_list, key=lambda item: self.euclidean_distance(item[1], item[2], needle_point[0][0], needle_point[0][1]))
         closest_index = value_list.index(closest_item)
 
         min_diff = float('inf')
