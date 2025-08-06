@@ -350,15 +350,25 @@ class AnalogGaugeInspector:
         needle_angle = np.arctan2(needle_point[0][1] - gauge_axis[1], needle_point[0][0] - gauge_axis[0])
 
         if len(value_angles) >= 2:
-            # 바늘 끝점과 가장 가까운 두 OCR 값을 선택
+            # 바늘 끝점과 가장 가까운 OCR 값을 선택
             needle_point_xy = np.array(needle_point[0])
-            value_angles.sort(key=lambda va: np.linalg.norm(
-                needle_point_xy - np.array([
-                    gauge_axis[0] + 100 * np.cos(va[1]),
-                    gauge_axis[1] + 100 * np.sin(va[1])
-                ])
-            ))
-            nearest1, nearest2 = value_angles[:2]
+            value_angles_sorted_by_distance = sorted(
+                value_angles,
+                key=lambda va: np.linalg.norm(
+                    needle_point_xy - np.array([
+                        gauge_axis[0] + 100 * np.cos(va[1]),
+                        gauge_axis[1] + 100 * np.sin(va[1])
+                    ])
+                )
+            )
+            nearest1 = value_angles_sorted_by_distance[0]
+
+            # 값 차이가 가장 적은 OCR 값 선택 (단, nearest1과 다른 값)
+            value1 = nearest1[0]
+            nearest2 = min(
+                [va for va in value_angles if va != nearest1],
+                key=lambda va: abs(va[0] - value1)
+            )
             value1, angle1 = nearest1
             value2, angle2 = nearest2
 
