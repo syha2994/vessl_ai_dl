@@ -303,32 +303,6 @@ class AnalogGaugeInspector:
                 except:
                     continue
 
-        # -------- OCR 보정: 최소/최대 값이 안 보일 경우 위치 예측 후 보강 --------
-        ##################################################################
-        if len(value_angles) < 2 or self.params.min_value not in [v for v, _ in value_angles] or self.params.max_value not in [v for v, _ in value_angles]:
-            print("⛳ 최소/최대 눈금이 누락됨 → 각도 기반으로 보정")
-
-            # 기존 OCR 각도 평균 기준으로 회전 방향 및 범위 추정
-            angles_only = [a for _, a in value_angles]
-            if len(angles_only) >= 2:
-                angles_unwrapped = np.unwrap(angles_only)
-                direction = np.sign(angles_unwrapped[-1] - angles_unwrapped[0])
-                approx_span = abs(angles_unwrapped[-1] - angles_unwrapped[0])
-            else:
-                direction = 1
-                approx_span = np.pi * 0.75  # 기본 반원 정도
-
-            # 최소/최대 값 위치 예측 (게이지 중심 기준)
-            for val, offset in [(self.params.min_value, 0), (self.params.max_value, approx_span)]:
-                angle = angles_only[0] + direction * offset if angles_only else offset
-                value_angles.append((val, angle))
-
-                # 시각화용 점 찍기
-                est_x = int(gauge_axis[0] + 100 * np.cos(angle))
-                est_y = int(gauge_axis[1] + 100 * np.sin(angle))
-                cv2.circle(cropped_image_np_vis, (est_x, est_y), 5, (0, 255, 255), -1)
-                cv2.putText(cropped_image_np_vis, f"{val:.0f}", (est_x + 5, est_y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-        ##################################################################
         # -------- Step6. 바늘과 OCR 중심점 간의 거리 계산 및 바늘 위치 결정 --------
         start_step6 = time.time()
         if len(ocr_centers) < 2:
@@ -396,7 +370,7 @@ class AnalogGaugeInspector:
             needle_relative_angle = needle_angle_unwrapped - angle1_unwrapped
             ratio = needle_relative_angle / angle_range
             estimated_value = value1 + ratio * (value2 - value1)
-            ######### 예상 범위를 벗어난 경우 -1로 처리
+            ######### 예상 범위를 벗어난 경우 0으로 처리
             if estimated_value < self.params.min_value or estimated_value > self.params.max_value:
                 estimated_value = 0
             #################################
