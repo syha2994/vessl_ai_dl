@@ -332,11 +332,9 @@ class AnalogGaugeInspector:
         if needle_point_2 is None:
             needle_point_2, dist2 = distances[1]
 
-        if abs(dist1 - dist2) / max(dist1, dist2) > 0.03:
+        if abs(dist1 - dist2) / max(dist1, dist2) > 0.04:
             needle_point = needle_point_1
         else:
-            print('a')
-
             def min_dist_to_ocr(pt):
                 return min([np.linalg.norm(np.array(pt) - np.array(center_ocr)) for center_ocr in ocr_centers])
 
@@ -358,13 +356,26 @@ class AnalogGaugeInspector:
             values = np.array(values)
             angles = np.unwrap(np.array(angles))  # angle discontinuity 보정
 
-            # 각도에 대한 보간 함수 생성
-            from scipy.interpolate import interp1d
-            angle_to_value = interp1d(angles, values, kind='linear', fill_value='extrapolate')
+            # 게이지 값 추정 로직 (방향성과 최소/최대 값 고려)
+            # 참고: value_angles는 [(value, angle), ...] 형식이며 최소 2개 이상 존재함
 
-            # 바늘 각도 보정 및 게이지 값 추정
-            needle_angle_unwrapped = np.unwrap([angles[0], needle_angle])[1]
-            estimated_value = angle_to_value(needle_angle_unwrapped)
+            # 가장 작은 값과 가장 큰 값을 갖는 두 OCR 값 사용
+            value_angles.sort(key=lambda x: x[0])
+            min_value, angle_min = value_angles[0]
+            max_value, angle_max = value_angles[-1]
+
+            # 바늘 각도를 unwrap하여 범위 문제 보정
+            needle_angle_unwrapped = np.unwrap([angle_min, needle_angle])[1]
+            angle_min_unwrapped = angle_min
+            angle_max_unwrapped = np.unwrap([angle_min, angle_max])[1]
+
+            # 전체 각도 범위 및 바늘 각도의 상대 위치 계산
+            angle_range = angle_max_unwrapped - angle_min_unwrapped
+            needle_relative_angle = needle_angle_unwrapped - angle_min_unwrapped
+            ratio = needle_relative_angle / angle_range
+
+            # 게이지 값 예측 (min + 비율 * 전체값 범위)
+            estimated_value = min_value + ratio * (max_value - min_value)
 
             print(f"Estimated gauge value: {estimated_value:.3f}")
             cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
