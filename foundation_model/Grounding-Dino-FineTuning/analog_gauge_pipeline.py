@@ -362,28 +362,33 @@ class AnalogGaugeInspector:
             value1, angle1 = nearest1
             value2, angle2 = nearest2
 
-            # 각도를 기준으로 시계 방향 정렬
-            angle1_unwrapped = angle1
-            angle2_unwrapped = np.unwrap([angle1, angle2])[1]
+            # 각 OCR 포인트의 좌표 계산
+            point1 = np.array([gauge_axis[0] + 100 * np.cos(angle1),
+                               gauge_axis[1] + 100 * np.sin(angle1)])
+            point2 = np.array([gauge_axis[0] + 100 * np.cos(angle2),
+                               gauge_axis[1] + 100 * np.sin(angle2)])
 
-            # 바늘 각도 계산
-            needle_angle = np.arctan2(needle_point[0][1] - gauge_axis[1], needle_point[0][0] - gauge_axis[0])
-            needle_angle_unwrapped = np.unwrap([angle1, needle_angle])[1]
+            # 벡터 정의
+            vec_value_span = point2 - point1
+            vec_to_needle = needle_point_xy - point1
 
-            # 각도 차이 비율 계산
-            angle_range = angle2_unwrapped - angle1_unwrapped
-            needle_relative_angle = needle_angle_unwrapped - angle1_unwrapped
-            ratio = needle_relative_angle / angle_range
+            # 각도 비율 계산
+            angle_span = np.arccos(np.clip(
+                np.dot(vec_value_span, vec_value_span) /
+                (np.linalg.norm(vec_value_span) * np.linalg.norm(vec_value_span) + 1e-6), -1.0, 1.0))
+
+            angle_to_needle = np.arccos(np.clip(
+                np.dot(vec_to_needle, vec_value_span) /
+                (np.linalg.norm(vec_to_needle) * np.linalg.norm(vec_value_span) + 1e-6), -1.0, 1.0))
+
+            ratio = angle_to_needle / (angle_span + 1e-6)
+
+            # 방향성 확인 (시계방향인지)
+            cross = np.cross(vec_value_span, vec_to_needle)
+            if cross < 0:
+                ratio = -ratio
 
             estimated_value = value1 + ratio * (value2 - value1)
-
-            ######### 흐름 방향 확인 (시계방향인지 반시계방향인지)
-            sorted_values_by_angle = sorted(value_angles, key=lambda va: va[1])
-            # is_clockwise = sorted_values_by_angle[0][0] < sorted_values_by_angle[-1][0]
-            #
-            # if (is_clockwise and value1 > value2) or (not is_clockwise and value1 < value2):
-            #     print("Gauge flow mismatch detected. Returning 0.")
-            #     estimated_value = 0.0
 
             print(f"Estimated gauge value: {estimated_value:.3f}")
             cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
