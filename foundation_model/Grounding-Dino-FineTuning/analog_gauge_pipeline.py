@@ -314,9 +314,6 @@ class AnalogGaugeInspector:
                 cv2.circle(
                     cropped_image_np_vis, (center_x, center_y), 7, (180, 105, 255), -1
                 )
-                cv2.line(
-                    cropped_image_np_vis, (center_x, center_y), gauge_axis, (180, 105, 255), 3
-                )
                 cv2.putText(
                     cropped_image_np_vis, text,
                     (int(pts[0][0]), int(pts[0][1]) - 10),
@@ -388,6 +385,15 @@ class AnalogGaugeInspector:
             return
 
         comparison_number1, comparison_number2 = value_list[closest_index], value_list[closest_value_index]
+        cv2.line(
+            cropped_image_np_vis, (tuple(comparison_number1[1:])), gauge_axis, (180, 105, 255), 3
+        )
+        cv2.line(
+            cropped_image_np_vis, (tuple(comparison_number2[1:])), gauge_axis, (180, 105, 255), 3
+        )
+        cv2.line(
+            cropped_image_np_vis, (tuple(needle_point[0])), gauge_axis, (0, 0, 255), 3
+        )
 
         if comparison_number1[0] < comparison_number2[0]:
             number_degree = self.angle_between_points(a=comparison_number1[1:], b=comparison_number2[1:], c=gauge_axis)
@@ -396,11 +402,14 @@ class AnalogGaugeInspector:
             number_degree = self.angle_between_points(a=comparison_number2[1:], b=comparison_number1[1:], c=gauge_axis)
             needle_degree = self.angle_between_points(a=comparison_number2[1:], b=tuple(needle_point[0]), c=gauge_axis)
 
-        comparison_number1_interval = abs(comparison_number1[0] - comparison_number2[0])
-        value_by_angle = comparison_number1_interval/number_degree
+        comparison_number_interval = abs(comparison_number1[0] - comparison_number2[0])
+        value_by_angle = abs(comparison_number_interval/number_degree)
 
         estimated_value = comparison_number1[0] + needle_degree * value_by_angle
         print(f"Estimated gauge value: {estimated_value:.3f}")
+        print(f"number_degree: {number_degree}")
+        print(f"needle_degree: {needle_degree}")
+        print(f"value_by_angle: {value_by_angle}")
         cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
 
         vis_output_path = os.path.join(self.params.result_dir, f"ocr_vis_{image_name}")
