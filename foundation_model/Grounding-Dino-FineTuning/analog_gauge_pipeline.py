@@ -350,29 +350,34 @@ class AnalogGaugeInspector:
         needle_angle = np.arctan2(needle_point[0][1] - gauge_axis[1], needle_point[0][0] - gauge_axis[0])
 
         if len(value_angles) >= 2:
-            # 바늘 끝점과 가장 가까운 두 OCR 값을 선택
-            needle_point_xy = np.array(needle_point[0])
-            value_angles.sort(key=lambda va: np.linalg.norm(
-                needle_point_xy - np.array([
-                    gauge_axis[0] + 100 * np.cos(va[1]),
-                    gauge_axis[1] + 100 * np.sin(va[1])
-                ])
-            ))
-            nearest1, nearest2 = value_angles[:2]
-            value1, angle1 = nearest1
-            value2, angle2 = nearest2
+            # 게이지 전체 범위 기준 각도 계산 (min~max)
+            angle_dict = dict(value_angles)
 
-            # 바늘 각도를 unwrap하여 범위 문제 보정
-            needle_angle_unwrapped = np.unwrap([angle1, needle_angle])[1]
-            angle1_unwrapped = angle1
-            angle2_unwrapped = np.unwrap([angle1, angle2])[1]
-            angle_range = angle2_unwrapped - angle1_unwrapped
-            needle_relative_angle = needle_angle_unwrapped - angle1_unwrapped
-            ratio = needle_relative_angle / angle_range
-            estimated_value = value1 + ratio * (value2 - value1)
-            ######### 예상 범위를 벗어난 경우 -1로 처리
-            if estimated_value < self.params.min_value or estimated_value > self.params.max_value:
-                estimated_value = -1
+            # min/max 각도 가져오기 (예측된 값 포함)
+            predicted_min_angle = min([a for v, a in value_angles])
+            predicted_max_angle = max([a for v, a in value_angles])
+            if self.params.min_value in angle_dict:
+                min_angle = angle_dict[self.params.min_value]
+            else:
+                min_angle = predicted_min_angle  # 추정된 값
+
+            if self.params.max_value in angle_dict:
+                max_angle = angle_dict[self.params.max_value]
+            else:
+                max_angle = predicted_max_angle  # 추정된 값
+
+            # 각도 전개 (unwrap) 처리
+            min_angle_unwrapped, max_angle_unwrapped = np.unwrap([min_angle, max_angle])
+            needle_angle_unwrapped = np.unwrap([min_angle, needle_angle])[1]
+
+            # 게이지 흐름 각도 범위 내에 바늘이 있는지 확인
+            if needle_angle_unwrapped < min(min_angle_unwrapped, max_angle_unwrapped) or needle_angle_unwrapped > max(min_angle_unwrapped, max_angle_unwrapped):
+                estimated_value = 0
+            else:
+                # 전체 흐름 기준 비율 보간
+                angle_range = max_angle_unwrapped - min_angle_unwrapped
+                ratio = (needle_angle_unwrapped - min_angle_unwrapped) / angle_range
+                estimated_value = self.params.min_value + ratio * (self.params.max_value - self.params.min_value)
 
             print(f"Estimated gauge value: {estimated_value:.3f}")
             cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
