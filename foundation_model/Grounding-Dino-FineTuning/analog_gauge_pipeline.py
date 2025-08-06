@@ -283,7 +283,6 @@ class AnalogGaugeInspector:
             center_x = int(moments["m10"] / moments["m00"])
             center_y = int(moments["m01"] / moments["m00"])
             gauge_axis = (center_x, center_y)
-            cv2.circle(cropped_image_np_vis, gauge_axis, radius=5, color=(255, 255, 0), thickness=-1)
         else:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "No valid moments found for needle", (0, 0, 255))
             return
@@ -357,8 +356,15 @@ class AnalogGaugeInspector:
 
             pt1_dist = min_dist_to_ocr(needle_point_1[0])
             pt2_dist = min_dist_to_ocr(needle_point_2[0])
+            if pt1_dist < pt2_dist:
+                needle_point = needle_point_1
+                gauge_axis = needle_point_2[0]
+            else:
+                needle_point = needle_point_2
+                gauge_axis = needle_point_1[0]
             needle_point = needle_point_1 if pt1_dist < pt2_dist else needle_point_2
 
+        cv2.circle(cropped_image_np_vis, gauge_axis, radius=5, color=(255, 255, 0), thickness=-1)
         cv2.circle(cropped_image_np_vis, tuple(needle_point[0]), radius=5, color=(0, 255, 0), thickness=-1)
         print(f"Step6 (Needle Point Selection) time: {time.time() - start_step6:.3f}s")
 
