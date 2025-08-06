@@ -379,11 +379,11 @@ class AnalogGaugeInspector:
 
             ######### 흐름 방향 확인 (시계방향인지 반시계방향인지)
             sorted_values_by_angle = sorted(value_angles, key=lambda va: va[1])
-            is_clockwise = sorted_values_by_angle[0][0] < sorted_values_by_angle[-1][0]
-
-            if (is_clockwise and value1 > value2) or (not is_clockwise and value1 < value2):
-                print("Gauge flow mismatch detected. Returning 0.")
-                estimated_value = 0.0
+            # is_clockwise = sorted_values_by_angle[0][0] < sorted_values_by_angle[-1][0]
+            #
+            # if (is_clockwise and value1 > value2) or (not is_clockwise and value1 < value2):
+            #     print("Gauge flow mismatch detected. Returning 0.")
+            #     estimated_value = 0.0
 
             print(f"Estimated gauge value: {estimated_value:.3f}")
             cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
