@@ -361,28 +361,19 @@ class AnalogGaugeInspector:
             nearest1, nearest2 = value_angles[:2]
             value1, angle1 = nearest1
             value2, angle2 = nearest2
-            ##################################
-            # 게이지 전체 범위 기준 각도 계산 (min~max)
-            angle_dict = dict(value_angles)
-            if self.params.min_value in angle_dict and self.params.max_value in angle_dict:
-                min_angle = angle_dict[self.params.min_value]
-                max_angle = angle_dict[self.params.max_value]
-                min_angle_unwrapped, max_angle_unwrapped = np.unwrap([min_angle, max_angle])
-                needle_angle_unwrapped = np.unwrap([min_angle, needle_angle])[1]
-                if needle_angle_unwrapped < min(min_angle_unwrapped, max_angle_unwrapped) or needle_angle_unwrapped > max(min_angle_unwrapped, max_angle_unwrapped):
-                    estimated_value = 0
-                else:
-                    # 기존 두 점 보간 사용
-                    angle1_unwrapped = angle1
-                    angle2_unwrapped = np.unwrap([angle1, angle2])[1]
-                    angle_range = angle2_unwrapped - angle1_unwrapped
-                    needle_relative_angle = needle_angle_unwrapped - angle1_unwrapped
-                    ratio = needle_relative_angle / angle_range
-                    estimated_value = value1 + ratio * (value2 - value1)
-            else:
-                print("⚠️ Could not determine gauge min/max angle for range checking.")
-                estimated_value = -1
-            ##################################
+
+            # 바늘 각도를 unwrap하여 범위 문제 보정
+            needle_angle_unwrapped = np.unwrap([angle1, needle_angle])[1]
+            angle1_unwrapped = angle1
+            angle2_unwrapped = np.unwrap([angle1, angle2])[1]
+            angle_range = angle2_unwrapped - angle1_unwrapped
+            needle_relative_angle = needle_angle_unwrapped - angle1_unwrapped
+            ratio = needle_relative_angle / angle_range
+            estimated_value = value1 + ratio * (value2 - value1)
+            ######### 예상 범위를 벗어난 경우 -1로 처리
+            # if estimated_value < self.params.min_value or estimated_value > self.params.max_value:
+            #     estimated_value = -1
+
             print(f"Estimated gauge value: {estimated_value:.3f}")
             cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
 
