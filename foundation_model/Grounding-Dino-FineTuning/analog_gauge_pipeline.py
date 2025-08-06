@@ -253,8 +253,8 @@ class AnalogGaugeInspector:
         if moments["m00"] != 0:
             center_x = int(moments["m10"] / moments["m00"])
             center_y = int(moments["m01"] / moments["m00"])
-            center = (center_x, center_y)
-            cv2.circle(cropped_image_np_vis, center, radius=5, color=(255, 255, 0), thickness=-1)
+            gauge_axis = (center_x, center_y)
+            cv2.circle(cropped_image_np_vis, gauge_axis, radius=5, color=(255, 255, 0), thickness=-1)
         else:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "No valid moments found for needle", (0, 0, 255))
             return
@@ -282,12 +282,18 @@ class AnalogGaugeInspector:
                 center_y = int(np.mean(pts[:, 1]))
                 try:
                     value = float(text)
-                    angle = np.arctan2(center_y - center[1], center_x - center[0])
+                    angle = np.arctan2(center_y - gauge_axis[1], center_x - gauge_axis[0])
                     ocr_centers.append((center_x, center_y))
                     value_angles.append((value, angle))
                     # 시각화
                     cv2.polylines(
                         cropped_image_np_vis, [pts.astype(int)], isClosed=True, color=(0, 0, 255), thickness=2
+                    )
+                    cv2.circle(
+                        cropped_image_np_vis, (center_x, center_y), 7, (180, 105, 255), -1
+                    )
+                    cv2.line(
+                        cropped_image_np_vis, (center_x, center_y), gauge_axis, (180, 105, 255), 3
                     )
                     cv2.putText(
                         cropped_image_np_vis, text,
@@ -305,17 +311,17 @@ class AnalogGaugeInspector:
             return
 
         # 중심으로부터 가장 먼 점을 첫 번째 점으로 선택
-        distances = [(pt, np.linalg.norm(np.array(pt[0]) - np.array(center))) for pt in needle_contour]
+        distances = [(pt, np.linalg.norm(np.array(pt[0]) - np.array(gauge_axis))) for pt in needle_contour]
         distances.sort(key=lambda x: x[1], reverse=True)
         needle_point_1, dist1 = distances[0]
 
         # needle_point_1 기준 반대 방향에 있는 점을 needle_point_2로 선택
-        direction_1 = np.array(needle_point_1[0]) - np.array(center)
+        direction_1 = np.array(needle_point_1[0]) - np.array(gauge_axis)
         direction_1_unit = direction_1 / (np.linalg.norm(direction_1) + 1e-6)
         most_opposite_score = 1.0
         needle_point_2 = None
         for pt, dist in distances[1:]:
-            direction = np.array(pt[0]) - np.array(center)
+            direction = np.array(pt[0]) - np.array(gauge_axis)
             direction_unit = direction / (np.linalg.norm(direction) + 1e-6)
             dot_product = np.dot(direction_unit, direction_1_unit)
             # dot_product가 -1에 가까울수록 반대 방향
@@ -343,7 +349,7 @@ class AnalogGaugeInspector:
 
         # -------- Step7. 바늘 각도 계산 및 게이지 값 추정 --------
         start_step7 = time.time()
-        needle_angle = np.arctan2(needle_point[0][1] - center[1], needle_point[0][0] - center[0])
+        needle_angle = np.arctan2(needle_point[0][1] - gauge_axis[1], needle_point[0][0] - gauge_axis[0])
 
         if len(value_angles) >= 2:
             # 각도 정렬
