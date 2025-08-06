@@ -1,9 +1,9 @@
 import os
 import cv2
+import csv
 import time
 import torch
 import numpy as np
-import csv
 from dataclasses import dataclass
 from torchvision.ops import box_convert
 
@@ -18,22 +18,27 @@ from paddleocr import PaddleOCR
 
 @dataclass
 class AnalogGaugeInspectorParams:
-    dino_config: str = os.getenv("DINO_CONFIG", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
-    gauge_dino_weights: str = os.getenv("GAUGE_DINO_WEIGHTS", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent/GroundingDINO/public/model/groundingdino_swint_ogc.pth")
-    needle_dino_weights: str = os.getenv("NEEDLE_DINO_WEIGHTS", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent/GroundingDINO/public/model/groundingdino_swint_ogc.pth")
-    sam_checkpoint: str = os.getenv("SAM_CHECKPOINT", "/Users/seungyeon/PycharmProjects/git/AIagent/ai-agent//GroundingDINO/public/model/sam_vit_h_4b8939.pth")
-    image_dir: str = os.getenv("IMAGE_DIR", "/Users/seungyeon/CREFLE/2.data/eq0/analog_gauge/various/square_preprocessing")
-    result_dir: str = os.getenv("RESULT_DIR", "/Users/seungyeon/CREFLE/2.data/eq0/analog_gauge/various/square_preprocessing/result")
+    dino_config: str = os.getenv("DINO_CONFIG", "./GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
+    gauge_dino_weights: str = os.getenv("GAUGE_DINO_WEIGHTS", "./model/groundingdino_swint_ogc.pth")
+    needle_dino_weights: str = os.getenv("NEEDLE_DINO_WEIGHTS", "./model/groundingdino_swint_ogc.pth")
+    sam_checkpoint: str = os.getenv("SAM_CHECKPOINT", "./model/sam_vit_h_4b8939.pth")
+    image_dir: str = os.getenv("IMAGE_DIR", "./images")
+    result_dir: str = os.getenv("RESULT_DIR", "./result")
+
     box_threshold_gauge: float = float(os.getenv("BOX_THRESHOLD_GAUGE", 0.3))
     text_threshold_gauge: float = float(os.getenv("TEXT_THRESHOLD_GAUGE", 0.25))
     box_threshold_needle: float = float(os.getenv("BOX_THRESHOLD_NEEDLE", 0.2))
     text_threshold_needle: float = float(os.getenv("TEXT_THRESHOLD_NEEDLE", 0.2))
+
     min_value: float = float(os.getenv("MIN_VALUE", -20))
     max_value: float = float(os.getenv("MAX_VALUE", 60))
     tick_interval: float = float(os.getenv("TICK_INTERVAL", 10))
+
     analog_gauge_caption: str = os.getenv("ANALOG_GAUGE_CAPTION", "analog gauge dial")
     needle_caption: str = os.getenv("NEEDLE_CAPTION", "needle pointer, clock hands, needle")
+
     mode: str = os.getenv("MODE", "filename")
+
     paddle_use_textline_orientation: bool = bool(os.getenv("PADDLE_USE_TEXTLINE_ORIENTATION", False))
     paddle_use_doc_unwarping: bool = bool(os.getenv("PADDLE_USE_UNWARPING", False))
     paddle_lang: str = os.getenv("PADDLE_LANG", 'ch')
@@ -140,6 +145,8 @@ class AnalogGaugeInspector:
         # 컨투어에서 타원을 피팅합니다.
         ellipse = cv2.fitEllipse(largest_contour)
         return ellipse
+
+
 
     def process_image(self, image_name):
         image_path = os.path.join(self.params.image_dir, image_name)
@@ -253,8 +260,8 @@ class AnalogGaugeInspector:
         if moments["m00"] != 0:
             center_x = int(moments["m10"] / moments["m00"])
             center_y = int(moments["m01"] / moments["m00"])
-            center = (center_x, center_y)
-            cv2.circle(cropped_image_np_vis, center, radius=5, color=(255, 255, 0), thickness=-1)
+            gauge_axis = (center_x, center_y)
+            cv2.circle(cropped_image_np_vis, gauge_axis, radius=7, color=(255, 255, 0), thickness=-1)
         else:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "No valid moments found for needle", (0, 0, 255))
             return
@@ -282,12 +289,18 @@ class AnalogGaugeInspector:
                 center_y = int(np.mean(pts[:, 1]))
                 try:
                     value = float(text)
-                    angle = np.arctan2(center_y - center[1], center_x - center[0])
+                    angle = np.arctan2(center_y - gauge_axis[1], center_x - gauge_axis[0])
                     ocr_centers.append((center_x, center_y))
                     value_angles.append((value, angle))
                     # 시각화
                     cv2.polylines(
                         cropped_image_np_vis, [pts.astype(int)], isClosed=True, color=(0, 0, 255), thickness=2
+                    )
+                    cv2.circle(
+                        cropped_image_np_vis, (center_x, center_y), 7, (180, 105, 255), -1
+                    )
+                    cv2.line(
+                        cropped_image_np_vis, (center_x, center_y), gauge_axis, (180, 105, 255), 3
                     )
                     cv2.putText(
                         cropped_image_np_vis, text,
@@ -300,22 +313,24 @@ class AnalogGaugeInspector:
         # -------- Step6. 바늘과 OCR 중심점 간의 거리 계산 및 바늘 위치 결정 --------
         start_step6 = time.time()
         if len(ocr_centers) < 2:
-            self.handle_missing_detection(cropped_image_np_vis, image_name, "Not enough valid OCR values found", (0, 0, 255))
+            self.handle_missing_detection(
+                cropped_image_np_vis, image_name, "Not enough valid OCR values found", (0, 0, 255)
+            )
             print(f"Step6 (Needle Point Selection) time: {time.time() - start_step6:.3f}s")
             return
 
         # 중심으로부터 가장 먼 점을 첫 번째 점으로 선택
-        distances = [(pt, np.linalg.norm(np.array(pt[0]) - np.array(center))) for pt in needle_contour]
+        distances = [(pt, np.linalg.norm(np.array(pt[0]) - np.array(gauge_axis))) for pt in needle_contour]
         distances.sort(key=lambda x: x[1], reverse=True)
         needle_point_1, dist1 = distances[0]
 
         # needle_point_1 기준 반대 방향에 있는 점을 needle_point_2로 선택
-        direction_1 = np.array(needle_point_1[0]) - np.array(center)
+        direction_1 = np.array(needle_point_1[0]) - np.array(gauge_axis)
         direction_1_unit = direction_1 / (np.linalg.norm(direction_1) + 1e-6)
         most_opposite_score = 1.0
         needle_point_2 = None
         for pt, dist in distances[1:]:
-            direction = np.array(pt[0]) - np.array(center)
+            direction = np.array(pt[0]) - np.array(gauge_axis)
             direction_unit = direction / (np.linalg.norm(direction) + 1e-6)
             dot_product = np.dot(direction_unit, direction_1_unit)
             # dot_product가 -1에 가까울수록 반대 방향
@@ -326,11 +341,9 @@ class AnalogGaugeInspector:
         if needle_point_2 is None:
             needle_point_2, dist2 = distances[1]
 
-        if abs(dist1 - dist2) / max(dist1, dist2) > 0.03:
+        if abs(dist1 - dist2) / max(dist1, dist2) > 0.05:
             needle_point = needle_point_1
         else:
-            print('a')
-
             def min_dist_to_ocr(pt):
                 return min([np.linalg.norm(np.array(pt) - np.array(center_ocr)) for center_ocr in ocr_centers])
 
@@ -342,66 +355,68 @@ class AnalogGaugeInspector:
         print(f"Step6 (Needle Point Selection) time: {time.time() - start_step6:.3f}s")
 
         # -------- Step7. 바늘 각도 계산 및 게이지 값 추정 --------
-        start_step7 = time.time()
-        needle_angle = np.arctan2(needle_point[0][1] - center[1], needle_point[0][0] - center[0])
+        needle_angle = np.arctan2(needle_point[0][1] - gauge_axis[1], needle_point[0][0] - gauge_axis[0])
 
-        if len(value_angles) >= 2:
-            # 각도 정렬
-            value_angles.sort(key=lambda x: x[1])
-            values, angles = zip(*value_angles)
-            values = np.array(values)
-            angles = np.unwrap(np.array(angles))  # angle discontinuity 보정
+        if len(value_angles) < 2:
+            self.handle_missing_detection(cropped_image_np_vis, image_name, 'not enough angle', (0, 0, 255))
+            return
 
-            # 각도에 대한 보간 함수 생성
-            from scipy.interpolate import interp1d
-            angle_to_value = interp1d(angles, values, kind='linear', fill_value='extrapolate')
+        # 각도 정렬
+        value_angles.sort(key=lambda x: x[1])
+        values, angles = zip(*value_angles)
+        values = np.array(values)
+        angles = np.unwrap(np.array(angles))  # angle discontinuity 보정
 
-            # 바늘 각도 보정 및 게이지 값 추정
-            needle_angle_unwrapped = np.unwrap([angles[0], needle_angle])[1]
-            estimated_value = angle_to_value(needle_angle_unwrapped)
+        # 각도에 대한 보간 함수 생성
+        from scipy.interpolate import interp1d
+        angle_to_value = interp1d(angles, values, kind='linear', fill_value='extrapolate')
 
-            print(f"Estimated gauge value: {estimated_value:.3f}")
-            cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
+        # 바늘 각도 보정 및 게이지 값 추정
+        needle_angle_unwrapped = np.unwrap([angles[0], needle_angle])[1]
+        estimated_value = angle_to_value(needle_angle_unwrapped)
 
-            vis_output_path = os.path.join(self.params.result_dir, f"ocr_vis_{image_name}")
-            cv2.imwrite(vis_output_path, cropped_image_np_vis)
-            print(f"OCR visualization saved to {vis_output_path}")
+        print(f"Estimated gauge value: {estimated_value:.3f}")
+        cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
 
-            # ---------------- VESSL 로그에 이미지 업로드 -------------------
-            import vessl
-            vessl.init()
+        vis_output_path = os.path.join(self.params.result_dir, f"ocr_vis_{image_name}")
+        cv2.imwrite(vis_output_path, cropped_image_np_vis)
+        print(f"OCR visualization saved to {vis_output_path}")
 
-            vessl.log({
-                "edge_image": vessl.Image(
-                    data=edge_image,
-                    caption=f"{image_name} - Canny Edge Detection"
-                )
-            })
-            vessl.log({
-                "analog_gauge_result": vessl.Image(
-                    data=cropped_image_np_vis,
-                    caption=f"{image_name} - Analog Gauge Result"
-                )
-            })
-            vessl.log({
-                "original_image": vessl.Image(
-                    data=image_bgr,
-                    caption=f"{image_name} - Original Image"
-                )
-            })
-            # -----------------------------------------------------------
-            # --- 정확도 계산 및 결과 반환 ---
-            try:
-                s, e, _, r = map(float, os.path.splitext(image_name)[0].split("_"))
-                R = e - s
-                D = abs(estimated_value - r)
-                E = D / R
-                A = 1 - E
-                print(f"[Result] {image_name} | Real: {r} | Predicted: {estimated_value:.2f} | Accuracy: {A*100:.2f}%")
-                return image_name, r, estimated_value, A * 100
-            except Exception as ex:
-                print(f"정확도 계산 실패: {ex}")
-                return None
+        # ---------------- VESSL 로그에 이미지 업로드 -------------------
+        import vessl
+        vessl.init()
+
+        vessl.log({
+            "edge_image": vessl.Image(
+                data=edge_image,
+                caption=f"{image_name} - Canny Edge Detection"
+            )
+        })
+        vessl.log({
+            "analog_gauge_result": vessl.Image(
+                data=cropped_image_np_vis,
+                caption=f"{image_name} - Analog Gauge Result"
+            )
+        })
+        vessl.log({
+            "original_image": vessl.Image(
+                data=image_bgr,
+                caption=f"{image_name} - Original Image"
+            )
+        })
+        # -----------------------------------------------------------
+        # --- 정확도 계산 및 결과 반환 ---
+        try:
+            s, e, _, r = map(float, os.path.splitext(image_name)[0].split("_"))
+            R = e - s
+            D = abs(estimated_value - r)
+            E = D / R
+            A = 1 - E
+            print(f"[Result] {image_name} | Real: {r} | Predicted: {estimated_value:.2f} | Accuracy: {A*100:.2f}%")
+            return image_name, r, estimated_value, A * 100
+        except Exception as ex:
+            print(f"정확도 계산 실패: {ex}")
+            return None
         else:
             print("Not enough valid OCR values for interpolation.")
         print(f"Step7 (Angle & Value Estimation) time: {time.time() - start_step7:.3f}s")
