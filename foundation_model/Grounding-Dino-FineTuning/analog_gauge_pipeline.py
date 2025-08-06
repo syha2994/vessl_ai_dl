@@ -370,6 +370,10 @@ class AnalogGaugeInspector:
             needle_relative_angle = needle_angle_unwrapped - angle1_unwrapped
             ratio = needle_relative_angle / angle_range
             estimated_value = value1 + ratio * (value2 - value1)
+            ######### 예상 범위를 벗어난 경우 -1로 처리
+            if estimated_value < self.params.min_value or estimated_value > self.params.max_value:
+                estimated_value = -1
+            #################################
 
             print(f"Estimated gauge value: {estimated_value:.3f}")
             cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
