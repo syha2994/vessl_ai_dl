@@ -391,10 +391,10 @@ class AnalogGaugeInspector:
 
         if comparison_number1[0] < comparison_number2[0]:
             number_degree = self.angle_between_points(a=comparison_number1[1:], b=comparison_number2[1:], c=gauge_axis)
-            needle_degree = self.angle_between_points(a=comparison_number1[1:], b=needle_point, c=gauge_axis)
+            needle_degree = self.angle_between_points(a=comparison_number1[1:], b=tuple(needle_point[0]), c=gauge_axis)
         else:
             number_degree = self.angle_between_points(a=comparison_number2[1:], b=comparison_number1[1:], c=gauge_axis)
-            needle_degree = self.angle_between_points(a=comparison_number2[1:], b=needle_point, c=gauge_axis)
+            needle_degree = self.angle_between_points(a=comparison_number2[1:], b=tuple(needle_point[0]), c=gauge_axis)
 
         comparison_number1_interval = abs(comparison_number1[0] - comparison_number2[0])
         value_by_angle = comparison_number1_interval/number_degree
