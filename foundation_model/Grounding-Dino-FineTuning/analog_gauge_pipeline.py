@@ -411,6 +411,8 @@ class AnalogGaugeInspector:
         value_by_angle = abs(comparison_number_interval/number_degree)
 
         estimated_value = base_value + needle_degree * value_by_angle
+        if self.params.max_value * 1.05 < estimated_value or self.params.min_value > estimated_value:
+            estimated_value = 0.0
         print(f"Estimated gauge value: {estimated_value:.3f}")
         print(f"number_degree: {number_degree}")
         print(f"needle_degree: {needle_degree}")
