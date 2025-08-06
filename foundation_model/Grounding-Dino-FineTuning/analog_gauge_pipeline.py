@@ -141,6 +141,35 @@ class AnalogGaugeInspector:
         ellipse = cv2.fitEllipse(largest_contour)
         return ellipse
 
+    @staticmethod
+    def angle_between_points(a, b, c):
+        """
+        중심점 c를 기준으로 점 a → 점 b 방향의 각도를 구합니다.
+        방향 정보가 포함된 signed angle이며, 도(degree) 단위로 반환합니다.
+        양수: 반시계 방향
+        음수: 시계 방향
+        """
+        # 벡터 생성
+        vec_a = np.array(a) - np.array(c)
+        vec_b = np.array(b) - np.array(c)
+
+        # 각도 계산 (라디안 단위)
+        angle_a = np.arctan2(vec_a[1], vec_a[0])
+        angle_b = np.arctan2(vec_b[1], vec_b[0])
+
+        # 두 각도의 차이
+        angle_diff = angle_b - angle_a
+
+        # -180 ~ 180 범위로 정규화
+        angle_diff = np.degrees(np.arctan2(np.sin(angle_diff), np.cos(angle_diff)))
+
+        return angle_diff
+
+    # 거리 계산 함수
+    @staticmethod
+    def euclidean_distance(x1, y1, x2, y2):
+        return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
     def process_image(self, image_name):
         image_path = os.path.join(self.params.image_dir, image_name)
         image_bgr = cv2.imread(image_path)
@@ -271,45 +300,36 @@ class AnalogGaugeInspector:
         expected_values = np.arange(self.params.min_value, self.params.max_value + 1e-5, self.params.tick_interval)
         expected_texts = set([str(int(v)) if v == int(v) else f"{v:.1f}" for v in expected_values])
 
-        # OCR 박스 중심 위치와 텍스트 매핑
-        ocr_centers = []
-        value_angles = []
+        value_list = []
 
         for box, (text, score) in ocr_result_with_boxes:
             if text in expected_texts and score > 0.7:
                 pts = np.array(box)
                 center_x = int(np.mean(pts[:, 0]))
                 center_y = int(np.mean(pts[:, 1]))
-                try:
-                    value = float(text)
-                    angle = np.arctan2(center_y - gauge_axis[1], center_x - gauge_axis[0])
-                    ocr_centers.append((center_x, center_y))
-                    value_angles.append((value, angle))
-                    # 시각화
-                    cv2.polylines(
-                        cropped_image_np_vis, [pts.astype(int)], isClosed=True, color=(0, 0, 255), thickness=2
-                    )
-                    cv2.circle(
-                        cropped_image_np_vis, (center_x, center_y), 7, (180, 105, 255), -1
-                    )
-                    cv2.line(
-                        cropped_image_np_vis, (center_x, center_y), gauge_axis, (180, 105, 255), 3
-                    )
-                    cv2.putText(
-                        cropped_image_np_vis, text,
-                        (int(pts[0][0]), int(pts[0][1]) - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2
-                    )
-                except:
-                    continue
+                value_list.append([float(text), center_x, center_y])
+                cv2.polylines(
+                    cropped_image_np_vis, [pts.astype(int)], isClosed=True, color=(0, 0, 255), thickness=2
+                )
+                cv2.circle(
+                    cropped_image_np_vis, (center_x, center_y), 7, (180, 105, 255), -1
+                )
+                cv2.line(
+                    cropped_image_np_vis, (center_x, center_y), gauge_axis, (180, 105, 255), 3
+                )
+                cv2.putText(
+                    cropped_image_np_vis, text,
+                    (int(pts[0][0]), int(pts[0][1]) - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2
+                )
+        if len(value_list) < 2:
+            self.handle_missing_detection(cropped_image_np_vis, image_name, "Not enough valid OCR values found", (0, 0, 255))
+            return
 
         # -------- Step6. 바늘과 OCR 중심점 간의 거리 계산 및 바늘 위치 결정 --------
         start_step6 = time.time()
-        if len(ocr_centers) < 2:
-            self.handle_missing_detection(cropped_image_np_vis, image_name, "Not enough valid OCR values found", (0, 0, 255))
-            print(f"Step6 (Needle Point Selection) time: {time.time() - start_step6:.3f}s")
-            return
 
+        # -------- 바늘 끝 점 위치 결정
         # 중심으로부터 가장 먼 점을 첫 번째 점으로 선택
         distances = [(pt, np.linalg.norm(np.array(pt[0]) - np.array(gauge_axis))) for pt in needle_contour]
         distances.sort(key=lambda x: x[1], reverse=True)
@@ -332,11 +352,11 @@ class AnalogGaugeInspector:
         if needle_point_2 is None:
             needle_point_2, dist2 = distances[1]
 
-        if abs(dist1 - dist2) / max(dist1, dist2) > 0.04:
+        if abs(dist1 - dist2) / max(dist1, dist2) > 0.05:
             needle_point = needle_point_1
         else:
             def min_dist_to_ocr(pt):
-                return min([np.linalg.norm(np.array(pt) - np.array(center_ocr)) for center_ocr in ocr_centers])
+                return min([np.linalg.norm(np.array(pt) - np.array((ocr_cx, ocr_cy))) for _, ocr_cx, ocr_cy in value_list])
 
             pt1_dist = min_dist_to_ocr(needle_point_1[0])
             pt2_dist = min_dist_to_ocr(needle_point_2[0])
@@ -347,86 +367,82 @@ class AnalogGaugeInspector:
 
         # -------- Step7. 바늘 각도 계산 및 게이지 값 추정 --------
         start_step7 = time.time()
-        needle_angle = np.arctan2(needle_point[0][1] - gauge_axis[1], needle_point[0][0] - gauge_axis[0])
+        value_list.sort(key=lambda x: x[0])
 
-        if len(value_angles) >= 2:
-            # 바늘 끝점과 가장 가까운 두 OCR 값을 선택
-            needle_point_xy = np.array(needle_point[0])
-            value_angles.sort(key=lambda va: np.linalg.norm(
-                needle_point_xy - np.array([
-                    gauge_axis[0] + 100 * np.cos(va[1]),
-                    gauge_axis[1] + 100 * np.sin(va[1])
-                ])
-            ))
-            nearest1, nearest2 = value_angles[:2]
-            value1, angle1 = nearest1
-            value2, angle2 = nearest2
+        closest_item = min(value_list, key=lambda item: self.euclidean_distance(item[1], item[2], gauge_axis[0], gauge_axis[1]))
+        closest_index = value_list.index(closest_item)
 
-            # 바늘 각도를 unwrap하여 범위 문제 보정
-            needle_angle_unwrapped = np.unwrap([angle1, needle_angle])[1]
-            angle1_unwrapped = angle1
-            angle2_unwrapped = np.unwrap([angle1, angle2])[1]
-            angle_range = angle2_unwrapped - angle1_unwrapped
-            needle_relative_angle = needle_angle_unwrapped - angle1_unwrapped
-            ratio = needle_relative_angle / angle_range
-            estimated_value = value1 + ratio * (value2 - value1)
+        min_diff = float('inf')
+        closest_value_index = None
 
-            ######### 흐름 방향 확인 (시계방향인지 반시계방향 지)
-            sorted_values_by_angle = sorted(value_angles, key=lambda va: va[1])
-            is_clockwise = sorted_values_by_angle[0][0] < sorted_values_by_angle[-1][0]
+        for i, item in enumerate(value_list):
+            if i == closest_index:
+                continue
+            diff = abs(item[0] - closest_item[0])
+            if diff < min_diff:
+                min_diff = diff
+                closest_value_index = i
 
-            if (is_clockwise and value1 > value2) or (not is_clockwise and value1 < value2):
-                print("Gauge flow mismatch detected. Returning 0.")
-                estimated_value = 0.0
+        if closest_value_index is None:
+            self.handle_missing_detection(cropped_image_np_vis, image_name, "Not enough valid OCR values found", (0, 0, 255))
+            return
 
-            ######### 예상 범위를 벗어난 경우 0으로 처리
-            # if estimated_value < self.params.min_value or estimated_value > self.params.max_value:
-            #     estimated_value = 0.0
+        comparison_number1, comparison_number2 = value_list[closest_index], value_list[closest_value_index]
 
-            print(f"Estimated gauge value: {estimated_value:.3f}")
-            cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
-
-            vis_output_path = os.path.join(self.params.result_dir, f"ocr_vis_{image_name}")
-            cv2.imwrite(vis_output_path, cropped_image_np_vis)
-            print(f"OCR visualization saved to {vis_output_path}")
-
-            # ---------------- VESSL 로그에 이미지 업로드 -------------------
-            import vessl
-            vessl.init()
-
-            vessl.log({
-                "edge_image": vessl.Image(
-                    data=edge_image,
-                    caption=f"{image_name} - Canny Edge Detection"
-                )
-            })
-            vessl.log({
-                "analog_gauge_result": vessl.Image(
-                    data=cropped_image_np_vis,
-                    caption=f"{image_name} - Analog Gauge Result"
-                )
-            })
-            vessl.log({
-                "original_image": vessl.Image(
-                    data=image_bgr,
-                    caption=f"{image_name} - Original Image"
-                )
-            })
-            # -----------------------------------------------------------
-            # --- 정확도 계산 및 결과 반환 ---
-            try:
-                s, e, _, r = map(float, os.path.splitext(image_name)[0].split("_"))
-                R = e - s
-                D = abs(estimated_value - r)
-                E = D / R
-                A = 1 - E
-                print(f"[Result] {image_name} | Real: {r} | Predicted: {estimated_value:.2f} | Accuracy: {A*100:.2f}%")
-                return image_name, r, estimated_value, A * 100
-            except Exception as ex:
-                print(f"정확도 계산 실패: {ex}")
-                return None
+        if comparison_number1[0] < comparison_number2[0]:
+            number_degree = self.angle_between_points(a=comparison_number1[1:], b=comparison_number2[1:], c=gauge_axis)
+            needle_degree = self.angle_between_points(a=comparison_number1[1:], b=needle_point, c=gauge_axis)
         else:
-            print("Not enough valid OCR values for interpolation.")
+            number_degree = self.angle_between_points(a=comparison_number2[1:], b=comparison_number1[1:], c=gauge_axis)
+            needle_degree = self.angle_between_points(a=comparison_number2[1:], b=needle_point, c=gauge_axis)
+
+        comparison_number1_interval = abs(comparison_number1[0] - comparison_number2[0])
+        value_by_angle = comparison_number1_interval/number_degree
+
+        estimated_value = comparison_number1[0] + needle_degree * value_by_angle
+        print(f"Estimated gauge value: {estimated_value:.3f}")
+        cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
+
+        vis_output_path = os.path.join(self.params.result_dir, f"ocr_vis_{image_name}")
+        cv2.imwrite(vis_output_path, cropped_image_np_vis)
+        print(f"OCR visualization saved to {vis_output_path}")
+
+        # ---------------- VESSL 로그에 이미지 업로드 -------------------
+        import vessl
+        vessl.init()
+
+        vessl.log({
+            "edge_image": vessl.Image(
+                data=edge_image,
+                caption=f"{image_name} - Canny Edge Detection"
+            )
+        })
+        vessl.log({
+            "analog_gauge_result": vessl.Image(
+                data=cropped_image_np_vis,
+                caption=f"{image_name} - Analog Gauge Result"
+            )
+        })
+        vessl.log({
+            "original_image": vessl.Image(
+                data=image_bgr,
+                caption=f"{image_name} - Original Image"
+            )
+        })
+        # -----------------------------------------------------------
+        # --- 정확도 계산 및 결과 반환 ---
+        try:
+            s, e, _, r = map(float, os.path.splitext(image_name)[0].split("_"))
+            R = e - s
+            D = abs(estimated_value - r)
+            E = D / R
+            A = 1 - E
+            print(f"[Result] {image_name} | Real: {r} | Predicted: {estimated_value:.2f} | Accuracy: {A*100:.2f}%")
+            return image_name, r, estimated_value, A * 100
+        except Exception as ex:
+            print(f"정확도 계산 실패: {ex}")
+            return None
+
         print(f"Step7 (Angle & Value Estimation) time: {time.time() - start_step7:.3f}s")
         return None
 
