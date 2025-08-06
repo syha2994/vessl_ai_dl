@@ -371,14 +371,17 @@ class AnalogGaugeInspector:
 
         min_diff = float('inf')
         closest_value_index = None
+        closest_dist = float('inf')
 
         for i, item in enumerate(value_list):
             if i == closest_index:
                 continue
             diff = abs(item[0] - closest_item[0])
-            if diff < min_diff:
+            dist = self.euclidean_distance(item[1], item[2], closest_item[1], closest_item[2])
+            if diff < min_diff or (diff == min_diff and dist < closest_dist):
                 min_diff = diff
                 closest_value_index = i
+                closest_dist = dist
 
         if closest_value_index is None:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "Not enough valid OCR values found", (0, 0, 255))
