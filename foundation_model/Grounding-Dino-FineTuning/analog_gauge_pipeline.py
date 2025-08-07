@@ -383,6 +383,8 @@ class AnalogGaugeInspector:
             if i == closest_index:
                 continue
             diff = abs(item[0] - closest_item[0])
+            if diff == 0:
+                continue
             dist = self.euclidean_distance(item[1], item[2], closest_item[1], closest_item[2])
             if diff < min_diff or (diff == min_diff and dist < closest_dist):
                 min_diff = diff
