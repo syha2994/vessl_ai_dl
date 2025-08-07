@@ -516,6 +516,8 @@ class AnalogGaugeInspector:
                     image_name, real, predicted, accuracy = result
                     writer.writerow([image_name, real, f"{predicted:.2f}", f"{accuracy:.2f}"])
                     total_accuracy += accuracy
+                if result is None:
+                    writer.writerow([image_name, real, "None", 0.0])
                     count += 1
 
             if count > 0:
