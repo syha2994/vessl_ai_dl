@@ -418,7 +418,7 @@ class AnalogGaugeInspector:
             cropped_image_np_vis, (tuple(comparison_number2[1:])), gauge_axis, (180, 105, 255), 3
         )
         cv2.line(
-            cropped_image_np_vis, (tuple(needle_point[0])), gauge_axis, (0, 0, 255), 3
+            cropped_image_np_vis, (tuple(needle_point[0])), gauge_axis, (255, 0, 0), 3
         )
 
         if comparison_number1[0] < comparison_number2[0]:
