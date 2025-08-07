@@ -432,7 +432,7 @@ class AnalogGaugeInspector:
             needle_degree = self.angle_between_points(a=comparison_number2[1:], b=tuple(needle_point[0]), c=gauge_axis)
 
         comparison_number_interval = abs(comparison_number1[0] - comparison_number2[0])
-        value_by_angle = abs(comparison_number_interval/number_degree)
+        value_by_angle = comparison_number_interval/number_degree
 
         estimated_value = base_value + needle_degree * value_by_angle
         if self.params.max_value * 1.05 < estimated_value or self.params.min_value > estimated_value:
