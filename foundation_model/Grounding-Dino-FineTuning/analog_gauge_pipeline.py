@@ -297,6 +297,7 @@ class AnalogGaugeInspector:
         value_list = []
 
         for box, (text, score) in ocr_result_with_boxes:
+            text = text.replace(",", ".")
             if text in expected_texts and score > 0.5:
                 pts = np.array(box)
                 center_x = int(np.mean(pts[:, 0]))
