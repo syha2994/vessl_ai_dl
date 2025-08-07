@@ -472,13 +472,17 @@ class AnalogGaugeInspector:
         # -----------------------------------------------------------
         # --- 정확도 계산 및 결과 반환 ---
         try:
-            s, e, _, r = map(float, os.path.splitext(image_name)[0].split("_"))
-            R = e - s
-            D = abs(estimated_value - r)
-            E = D / R
-            A = 1 - E
-            print(f"[Result] {image_name} | Real: {r} | Predicted: {estimated_value:.2f} | Accuracy: {A*100:.2f}%")
-            return image_name, r, estimated_value, A * 100
+            parts = os.path.splitext(image_name)[0].split("_")
+            if len(parts) >= 4:
+                s, e, _, r = map(float, parts[:4])
+                R = e - s
+                D = abs(estimated_value - r)
+                E = D / R
+                A = 1 - E
+                print(f"[Result] {image_name} | Real: {r} | Predicted: {estimated_value:.2f} | Accuracy: {A*100:.2f}%")
+                return image_name, r, estimated_value, A * 100
+            else:
+                raise ValueError("Filename does not contain enough parts for accuracy calculation.")
         except Exception as ex:
             print(f"정확도 계산 실패: {ex}")
             return None
