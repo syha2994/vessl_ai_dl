@@ -274,8 +274,7 @@ class AnalogGaugeInspector:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "No contours found for needle", (0, 0, 255))
             return
 
-        # 가장 큰 컨투어를 바늘로 간주
-        needle_contour = max(contours, key=cv2.contourArea)
+        needle_contour = np.vstack(contours)
 
         # 바늘 마스크의 무게중심을 계산해 게이지의 중심점으로 사용
         moments = cv2.moments(needle_mask[0].astype(np.uint8))
