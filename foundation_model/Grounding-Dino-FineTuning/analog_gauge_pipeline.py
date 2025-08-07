@@ -348,8 +348,24 @@ class AnalogGaugeInspector:
         if needle_point_2 is None:
             needle_point_2, dist2 = distances[1]
 
-        if abs(dist1 - dist2) / max(dist1, dist2) > 0.05:
+        if 0.1 < abs(dist1 - dist2) / max(dist1, dist2):
             needle_point = needle_point_1
+        elif 0.05 < abs(dist1 - dist2) / max(dist1, dist2) <= 0.1:
+            height, width = cropped_image_np.shape[:2]
+
+            def distance_to_border(pt):
+                x, y = pt
+                return min(x, width - x, y, height - y)
+
+            dist_to_border_1 = distance_to_border(needle_point_1[0])
+            dist_to_border_2 = distance_to_border(needle_point_2[0])
+
+            if dist_to_border_1 < dist_to_border_2:
+                needle_point = needle_point_1
+                gauge_axis = needle_point_2[0]
+            else:
+                needle_point = needle_point_2
+                gauge_axis = needle_point_1[0]
         else:
             def min_dist_to_ocr(pt):
                 return min([np.linalg.norm(np.array(pt) - np.array((ocr_cx, ocr_cy))) for _, ocr_cx, ocr_cy in value_list])
