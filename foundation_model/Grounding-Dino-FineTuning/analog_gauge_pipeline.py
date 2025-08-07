@@ -346,7 +346,7 @@ class AnalogGaugeInspector:
 
         if 0.15 < abs(dist1 - dist2) / max(dist1, dist2):
             needle_point = needle_point_1
-        elif 0.05 < abs(dist1 - dist2) / max(dist1, dist2) <= 0.15:
+        elif 0.1 < abs(dist1 - dist2) / max(dist1, dist2) <= 0.15:
             height, width = cropped_image_np.shape[:2]
 
             def distance_to_border(pt):
