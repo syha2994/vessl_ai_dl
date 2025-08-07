@@ -95,9 +95,6 @@ class AnalogGaugeInspector:
             return None
 
         image_area = image.shape[0] * image.shape[1]
-        height, width = image.shape[:2]
-        margin_x = width * 0.01
-        margin_y = height * 0.01
         sorted_indices = torch.argsort(logits, descending=True)
 
         for idx in sorted_indices:
@@ -105,8 +102,6 @@ class AnalogGaugeInspector:
             box_xyxy = self.scale_and_convert_boxes_to_xyxy(box, image)
             x1, y1, x2, y2 = box_xyxy
             # Skip boxes too close to the image border
-            if x1 < margin_x or y1 < margin_y or x2 > width - margin_x or y2 > height - margin_y:
-                continue
             box_area = (x2 - x1) * (y2 - y1)
             if box_area < 0.4 * image_area:
                 return box
