@@ -368,7 +368,7 @@ class AnalogGaugeInspector:
             def min_dist_to_ocr(pt):
                 return min([
                     np.linalg.norm(np.array(pt) - np.array((ocr_cx, ocr_cy)))
-                    for _, ocr_cx, ocr_cy, _ in value_list
+                    for _, ocr_cx, ocr_cy in value_list
                 ])
 
             pt1_dist = min_dist_to_ocr(needle_point_1[0])
