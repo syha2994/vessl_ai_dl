@@ -472,11 +472,22 @@ class AnalogGaugeInspector:
             estimated_value = base_value + direction_sign * needle_degree * value_per_degree
             value_by_angle = value_per_degree
 
-            # Clamp to valid range
-            if estimated_value - params.max_value >= params.tick_interval:
-                estimated_value = self.params.min_value
-            elif params.min_value - estimated_value >= params.tick_interval:
-                estimated_value = self.params.max_value
+            while True:
+                if estimated_value > params.max_value:
+                    if estimated_value - params.max_value >= params.tick_interval:
+                        estimated_value = self.params.min_value
+                        break
+                    else:
+                        estimated_value = params.max_value
+                        break
+                if estimated_value < params.min_value:
+                    if params.min_value - estimated_value >= params.tick_interval:
+                        estimated_value = self.params.max_value
+                        break
+                    else:
+                        estimated_value = params.min_value
+                        break
+                break
 
         print(f"Estimated gauge value: {estimated_value:.3f}")
         print(f"number_degree: {number_degree}")
