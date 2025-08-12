@@ -348,7 +348,7 @@ class AnalogGaugeInspector:
         needle_point2_score = 0
         height, width = cropped_image_np.shape[:2]
 
-        if 0.3 < abs(dist1 - dist2) / ((dist1 + dist2) // 2):
+        if 0.3 < abs(dist1 - dist2) / dist1:
             needle_point = needle_point_1
         else:
             # 이미지 기준으로 더 바깥쪽에 있는 점에 점수 추가
@@ -474,11 +474,8 @@ class AnalogGaugeInspector:
 
             while True:
                 if estimated_value > params.max_value:
-                    if estimated_value - params.max_value >= params.tick_interval:
+                    if estimated_value - params.max_value >= params.tick_interval * 0.9:
                         estimated_value = self.params.min_value
-                        break
-                    else:
-                        estimated_value = params.max_value
                         break
                 if estimated_value < params.min_value:
                     if params.min_value - estimated_value >= params.tick_interval:
