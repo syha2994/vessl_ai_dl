@@ -345,11 +345,14 @@ class AnalogGaugeInspector:
         if needle_point_2 is None:
             needle_point_2, dist2 = distances[1]
 
-        if 0.15 < abs(dist1 - dist2) / ((dist1+dist2)//2):
+        needle_point1_score = 0
+        needle_point2_score = 0
+        if 0.2 < abs(dist1 - dist2) / ((dist1+dist2)//2):
             needle_point = needle_point_1
-        elif 0.1 < abs(dist1 - dist2) / ((dist1+dist2)//2) <= 0.15:
+        else:
             height, width = cropped_image_np.shape[:2]
 
+            # 이미지 기준으로 더 바깥쪽에 있는 점에 점수 추가
             def distance_to_border(pt):
                 x, y = pt
                 return min(x, width - x, y, height - y)
@@ -358,12 +361,11 @@ class AnalogGaugeInspector:
             dist_to_border_2 = distance_to_border(needle_point_2[0])
 
             if dist_to_border_1 < dist_to_border_2:
-                needle_point = needle_point_1
-                gauge_axis = needle_point_2[0]
+                needle_point1_score += 1
             else:
-                needle_point = needle_point_2
-                gauge_axis = needle_point_1[0]
-        else:
+                needle_point2_score += 1
+
+            # 숫자에 좀 더 가까운 점에 점수 추가
             def min_dist_to_ocr(pt):
                 return min([
                     np.linalg.norm(np.array(pt) - np.array((ocr_cx, ocr_cy)))
@@ -374,11 +376,22 @@ class AnalogGaugeInspector:
             pt2_dist = min_dist_to_ocr(needle_point_2[0])
 
             if pt1_dist < pt2_dist:
+                needle_point_1 += 1
+            else:
+                needle_point_2 += 1
+
+            # 두 개의 점수가 같으면 무게중심으로부터 좀 더 먼 점 선택
+            if needle_point1_score == needle_point2_score:
                 needle_point = needle_point_1
-                gauge_axis = needle_point_2[0]
+
+            # 점수가 더 높은 점 선택
+            if needle_point1_score > needle_point2_score:
+                needle_point = needle_point_1
             else:
                 needle_point = needle_point_2
-                gauge_axis = needle_point_1[0]
+
+            # 게이지 중심을 이미지 중심으로 선택
+            gauge_axis = (width // 2, height // 2)
 
         cv2.circle(cropped_image_np_vis, gauge_axis, radius=5, color=(255, 255, 0), thickness=-1)
         cv2.circle(cropped_image_np_vis, tuple(needle_point[0]), radius=5, color=(0, 255, 0), thickness=-1)
