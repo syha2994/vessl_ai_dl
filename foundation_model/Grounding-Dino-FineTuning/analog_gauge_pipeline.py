@@ -346,7 +346,7 @@ class AnalogGaugeInspector:
 
         needle_point1_score = 0
         needle_point2_score = 0
-        if 0.2 < abs(dist1 - dist2) / ((dist1 + dist2) // 2):
+        if 0.3 < abs(dist1 - dist2) / ((dist1 + dist2) // 2):
             needle_point = needle_point_1
         else:
             height, width = cropped_image_np.shape[:2]
