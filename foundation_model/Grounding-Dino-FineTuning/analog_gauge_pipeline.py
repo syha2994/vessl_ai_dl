@@ -296,13 +296,14 @@ class AnalogGaugeInspector:
 
         value_list = []
 
+        # value_list item format: [value(float), center_x(int), center_y(int), score(float)]
         for box, (text, score) in ocr_result_with_boxes:
             text = text.replace(",", ".")
             if text in expected_texts and score > 0.5:
                 pts = np.array(box)
                 center_x = int(np.mean(pts[:, 0]))
                 center_y = int(np.mean(pts[:, 1]))
-                value_list.append([float(text), center_x, center_y])
+                value_list.append([float(text), center_x, center_y, float(score)])
                 cv2.polylines(
                     cropped_image_np_vis, [pts.astype(int)], isClosed=True, color=(0, 0, 255), thickness=2
                 )
@@ -364,7 +365,10 @@ class AnalogGaugeInspector:
                 gauge_axis = needle_point_1[0]
         else:
             def min_dist_to_ocr(pt):
-                return min([np.linalg.norm(np.array(pt) - np.array((ocr_cx, ocr_cy))) for _, ocr_cx, ocr_cy in value_list])
+                return min([
+                    np.linalg.norm(np.array(pt) - np.array((ocr_cx, ocr_cy)))
+                    for _, ocr_cx, ocr_cy, _ in value_list
+                ])
 
             pt1_dist = min_dist_to_ocr(needle_point_1[0])
             pt2_dist = min_dist_to_ocr(needle_point_2[0])
@@ -382,50 +386,58 @@ class AnalogGaugeInspector:
 
         # -------- Step7. 바늘 각도 계산 및 게이지 값 추정 --------
         start_step7 = time.time()
-        value_list.sort(key=lambda x: x[0])
-
-        closest_item = min(value_list, key=lambda item: self.euclidean_distance(item[1], item[2], needle_point[0][0], needle_point[0][1]))
-        closest_index = value_list.index(closest_item)
-
-        min_diff = float('inf')
-        closest_value_index = None
-        closest_dist = float('inf')
-
-        for i, item in enumerate(value_list):
-            if i == closest_index:
-                continue
-            diff = abs(item[0] - closest_item[0])
-            if diff == 0:
-                continue
-            dist = self.euclidean_distance(item[1], item[2], closest_item[1], closest_item[2])
-            if diff < min_diff or (diff == min_diff and dist < closest_dist):
-                min_diff = diff
-                closest_value_index = i
-                closest_dist = dist
-
-        if closest_value_index is None:
+        # 두 숫자 선택 기준: OCR 신뢰도가 높은 순으로 Top-2 선택
+        # value_list 항목 구조: [value, cx, cy, score]
+        if len(value_list) < 2:
             self.handle_missing_detection(cropped_image_np_vis, image_name, "Not enough valid OCR values found", (0, 0, 255))
             return
 
-        comparison_number1, comparison_number2 = value_list[closest_index], value_list[closest_value_index]
+        # 1) 점수 기준 내림차순 정렬
+        sorted_by_score = sorted(value_list, key=lambda x: x[3], reverse=True)
+
+        # 2) 동점일 경우 바늘 끝(needle_point)에 더 가까운 항목을 우선
+        def dist_to_needle(item):
+            return self.euclidean_distance(item[1], item[2], needle_point[0][0], needle_point[0][1])
+
+        # 상위 4개 정도만 거리 재정렬 대상으로 제한 (불필요한 연산 방지)
+        candidates = sorted_by_score[:4]
+        candidates.sort(key=lambda x: ( -x[3], dist_to_needle(x) ))
+
+        comparison_number1, comparison_number2 = candidates[0], candidates[1]
         cv2.line(
-            cropped_image_np_vis, (tuple(comparison_number1[1:])), gauge_axis, (180, 105, 255), 3
+            cropped_image_np_vis, (int(comparison_number1[1]), int(comparison_number1[2])), gauge_axis, (180, 105, 255), 3
         )
         cv2.line(
-            cropped_image_np_vis, (tuple(comparison_number2[1:])), gauge_axis, (180, 105, 255), 3
+            cropped_image_np_vis, (int(comparison_number2[1]), int(comparison_number2[2])), gauge_axis, (180, 105, 255), 3
         )
         cv2.line(
-            cropped_image_np_vis, (tuple(needle_point[0])), gauge_axis, (255, 0, 0), 3
+            cropped_image_np_vis, (int(needle_point[0][0]), int(needle_point[0][1])), gauge_axis, (255, 0, 0), 3
         )
 
         if comparison_number1[0] < comparison_number2[0]:
             base_value = comparison_number1[0]
-            number_degree = self.angle_between_points(a=comparison_number1[1:], b=comparison_number2[1:], c=gauge_axis)
-            needle_degree = self.angle_between_points(a=comparison_number1[1:], b=tuple(needle_point[0]), c=gauge_axis)
+            number_degree = self.angle_between_points(
+                a=(int(comparison_number1[1]), int(comparison_number1[2])),
+                b=(int(comparison_number2[1]), int(comparison_number2[2])),
+                c=gauge_axis,
+            )
+            needle_degree = self.angle_between_points(
+                a=(int(comparison_number1[1]), int(comparison_number1[2])),
+                b=(int(needle_point[0][0]), int(needle_point[0][1])),
+                c=gauge_axis,
+            )
         else:
             base_value = comparison_number2[0]
-            number_degree = self.angle_between_points(a=comparison_number2[1:], b=comparison_number1[1:], c=gauge_axis)
-            needle_degree = self.angle_between_points(a=comparison_number2[1:], b=tuple(needle_point[0]), c=gauge_axis)
+            number_degree = self.angle_between_points(
+                a=(int(comparison_number2[1]), int(comparison_number2[2])),
+                b=(int(comparison_number1[1]), int(comparison_number1[2])),
+                c=gauge_axis,
+            )
+            needle_degree = self.angle_between_points(
+                a=(int(comparison_number2[1]), int(comparison_number2[2])),
+                b=(int(needle_point[0][0]), int(needle_point[0][1])),
+                c=gauge_axis,
+            )
 
         comparison_number_interval = abs(comparison_number1[0] - comparison_number2[0])
         value_by_angle = comparison_number_interval/number_degree
