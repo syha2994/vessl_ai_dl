@@ -389,8 +389,8 @@ class AnalogGaugeInspector:
             else:
                 needle_point = needle_point_2
 
-            # 게이지 중심을 이미지 중심으로 선택
-            gauge_axis = (width // 2, height // 2)
+        # 게이지 중심을 이미지 중심으로 선택
+        gauge_axis = (width // 2, height // 2)
 
         cv2.circle(cropped_image_np_vis, gauge_axis, radius=5, color=(255, 255, 0), thickness=-1)
         cv2.circle(cropped_image_np_vis, tuple(needle_point[0]), radius=5, color=(0, 255, 0), thickness=-1)
