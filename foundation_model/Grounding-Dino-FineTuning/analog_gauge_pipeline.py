@@ -346,11 +346,11 @@ class AnalogGaugeInspector:
 
         needle_point1_score = 0
         needle_point2_score = 0
+        height, width = cropped_image_np.shape[:2]
+
         if 0.3 < abs(dist1 - dist2) / ((dist1 + dist2) // 2):
             needle_point = needle_point_1
         else:
-            height, width = cropped_image_np.shape[:2]
-
             # 이미지 기준으로 더 바깥쪽에 있는 점에 점수 추가
             def distance_to_border(pt):
                 x, y = pt
@@ -389,7 +389,6 @@ class AnalogGaugeInspector:
             else:
                 needle_point = needle_point_2
 
-        # 게이지 중심을 이미지 중심으로 선택
         gauge_axis = (width // 2, height // 2)
 
         cv2.circle(cropped_image_np_vis, gauge_axis, radius=5, color=(255, 255, 0), thickness=-1)
