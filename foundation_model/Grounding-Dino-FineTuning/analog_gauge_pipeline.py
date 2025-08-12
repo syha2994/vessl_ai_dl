@@ -375,9 +375,9 @@ class AnalogGaugeInspector:
             pt2_dist = min_dist_to_ocr(needle_point_2[0])
 
             if pt1_dist < pt2_dist:
-                needle_point_1 += 1
+                needle_point1_score += 1
             else:
-                needle_point_2 += 1
+                needle_point2_score += 1
 
             # 두 개의 점수가 같으면 무게중심으로부터 좀 더 먼 점 선택
             if needle_point1_score == needle_point2_score:
