@@ -424,34 +424,61 @@ class AnalogGaugeInspector:
 
         comparison_number1, comparison_number2 = value_list[closest_index], value_list[closest_value_index]
         cv2.line(
-            cropped_image_np_vis, (tuple(comparison_number1[1:])), gauge_axis, (180, 105, 255), 3
+            cropped_image_np_vis, (int(comparison_number1[1]), int(comparison_number1[2])), gauge_axis, (180, 105, 255), 3
         )
         cv2.line(
-            cropped_image_np_vis, (tuple(comparison_number2[1:])), gauge_axis, (180, 105, 255), 3
+            cropped_image_np_vis, (int(comparison_number2[1]), int(comparison_number2[2])), gauge_axis, (180, 105, 255), 3
         )
         cv2.line(
-            cropped_image_np_vis, (tuple(needle_point[0])), gauge_axis, (255, 0, 0), 3
+            cropped_image_np_vis, (int(needle_point[0][0]), int(needle_point[0][1])), gauge_axis, (255, 0, 0), 3
         )
 
-        if comparison_number1[0] < comparison_number2[0]:
-            base_value = comparison_number1[0]
-            number_degree = self.angle_between_points(a=comparison_number1[1:], b=comparison_number2[1:], c=gauge_axis)
-            needle_degree = self.angle_between_points(a=comparison_number1[1:], b=tuple(needle_point[0]), c=gauge_axis)
+        # --- Robust angle-to-value mapping ---
+        # Build integer coordinate tuples for safety
+        a_point = (int(comparison_number1[1]), int(comparison_number1[2]))
+        b_point = (int(comparison_number2[1]), int(comparison_number2[2]))
+        p_needle = (int(needle_point[0][0]), int(needle_point[0][1]))
+
+        # Choose lower value as base for a consistent starting point
+        if comparison_number1[0] <= comparison_number2[0]:
+            base_value = float(comparison_number1[0])
+            a_point_use, b_point_use = a_point, b_point
+            delta_value = float(comparison_number2[0] - comparison_number1[0])
         else:
-            base_value = comparison_number2[0]
-            number_degree = self.angle_between_points(a=comparison_number2[1:], b=comparison_number1[1:], c=gauge_axis)
-            needle_degree = self.angle_between_points(a=comparison_number2[1:], b=tuple(needle_point[0]), c=gauge_axis)
+            base_value = float(comparison_number2[0])
+            a_point_use, b_point_use = b_point, a_point
+            delta_value = float(comparison_number1[0] - comparison_number2[0])
 
-        comparison_number_interval = abs(comparison_number1[0] - comparison_number2[0])
-        value_by_angle = comparison_number_interval/number_degree
+        # Signed angles (-180~180), measured from a_point_use
+        number_degree = self.angle_between_points(a=a_point_use, b=b_point_use, c=gauge_axis)
+        needle_degree = self.angle_between_points(a=a_point_use, b=p_needle,      c=gauge_axis)
 
-        estimated_value = base_value + needle_degree * value_by_angle
-        if self.params.max_value * 1.05 < estimated_value or self.params.min_value > estimated_value:
-            estimated_value = 0.0
+        # Guard against degenerate small separations
+        EPS = 1e-3
+        deg_mag = abs(number_degree)
+        if deg_mag < EPS:
+            # Fallback: cannot define scale; keep base_value and annotate
+            estimated_value = base_value
+            value_by_angle = 0.0
+            print("[WARN] number_degree too small; using base_value as estimated_value.")
+        else:
+            # Scale uses absolute separation; direction handled separately
+            value_per_degree = delta_value / deg_mag
+
+            # Determine whether values increase CCW (positive angle) or CW (negative angle)
+            # If (delta_value * number_degree) > 0, then CCW means increasing.
+            direction_sign = 1.0 if (delta_value * number_degree) > 0 else -1.0
+
+            estimated_value = base_value + direction_sign * needle_degree * value_per_degree
+            value_by_angle = value_per_degree
+
+            # Clamp to valid range
+            estimated_value = max(self.params.min_value, min(self.params.max_value, estimated_value))
+
         print(f"Estimated gauge value: {estimated_value:.3f}")
         print(f"number_degree: {number_degree}")
         print(f"needle_degree: {needle_degree}")
-        print(f"value_by_angle: {value_by_angle}")
+        print(f"value_by_angle(deg->value): {value_by_angle}")
         cv2.putText(cropped_image_np_vis, f"{estimated_value:.1f}", (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 2)
 
         vis_output_path = os.path.join(self.params.result_dir, f"ocr_vis_{image_name}")
